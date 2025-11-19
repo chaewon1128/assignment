@@ -5,6 +5,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pydeck as pdk
 import os
+import itertools # for combining population data
 
 # Streamlit 페이지 설정: 전체 레이아웃을 넓게 사용하도록 설정합니다.
 st.set_page_config(page_title="서울 대기질 & 라이프스타일 분석 대시보드", layout="wide")
@@ -57,7 +58,6 @@ def load_data():
         df = pd.DataFrame()
         
         try:
-            # 대부분의 한국어 CSV 파일은 'euc-kr' 또는 'cp949' 인코딩을 사용합니다.
             # 인코딩 순서: euc-kr -> cp949 -> utf-8
             try:
                 df = pd.read_csv(file_name, encoding='euc-kr')
@@ -132,9 +132,31 @@ def load_data():
         delivery.dropna(subset=['Date'], inplace=True)
         delivery['Year'] = delivery['Date'].dt.year.astype(str)
         
-    # 5. 인구 데이터 (ppl_2012, ppl_2014) - 전처리 최소화
-    ppl_2012 = data_map.get('ppl_2012', pd.DataFrame())
-    ppl_2014 = data_map.get('ppl_2014', pd.DataFrame())
+    # 5. 인구 데이터 (ppl_2012, ppl_2014) - 전처리 로직 추가
+    ppl_2012_df = data_map.get('ppl_2012', pd.DataFrame())
+    ppl_2014_df = data_map.get('ppl_2014', pd.DataFrame())
+
+    def preprocess_ppl_data(df, year):
+        if df.empty:
+            return df
+        # 컬럼 이름 변경
+        df = df.rename(columns={'거주지': '자치구', '개수': '인구_이동_건수'})
+        # '인구_이동_건수' 컬럼을 숫자로 변환
+        df['인구_이동_건수'] = pd.to_numeric(df['인구_이동_건수'], errors='coerce')
+        df.dropna(subset=['인구_이동_건수'], inplace=True)
+        df['Year'] = str(year)
+        # 서울 자치구만 필터링 (기타지역, 경기, 인천 등 제외)
+        seoul_gus_list = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구']
+        return df[df['자치구'].isin(seoul_gus_list)]
+
+    ppl_2012 = preprocess_ppl_data(ppl_2012_df, 2012)
+    ppl_2014 = preprocess_ppl_data(ppl_2014_df, 2014)
+
+    # Combine population data for easier use in Tab 4
+    if not ppl_2012.empty and not ppl_2014.empty:
+        combined_ppl = pd.concat([ppl_2012, ppl_2014], ignore_index=True)
+    else:
+        combined_ppl = pd.DataFrame()
 
     # --- 6. 통합 데이터 생성 ---
     
@@ -163,13 +185,14 @@ def load_data():
     # GUS (자치구 목록)
     GUS_df = pd.DataFrame() # GUS_df는 실제로 사용되지 않으므로 빈 DF 유지
     
+    # combined_ppl을 추가하여 반환합니다.
     return (spent, ppl_2012, ppl_2014, delivery, pol, trans, 
-            GUS_df, combined_mobility, combined_delivery)
+            GUS_df, combined_mobility, combined_delivery, combined_ppl)
 
 # --- 데이터 로드 및 전역 변수 설정 ---
-# 로드 함수 실행
+# 로드 함수 실행 (반환 값에 combined_ppl 추가)
 try:
-    (spent, ppl_2012, ppl_2014, delivery, pol, trans, GUS_df, combined_mobility, combined_delivery) = load_data()
+    (spent, ppl_2012, ppl_2014, delivery, pol, trans, GUS_df, combined_mobility, combined_delivery, combined_ppl) = load_data()
 except Exception as e:
     # load_data 함수 자체에서 오류가 나는 경우 (매우 드물지만 대비)
     st.error(f"데이터 로드 과정 중 예측하지 못한 오류가 발생했습니다: {e}")
@@ -206,6 +229,8 @@ elif spent.empty:
     st.warning("⚠️ 지출 데이터(spent.csv) 로드에 실패했습니다. '소비 및 마케팅 전략' 탭의 일부 기능이 제한됩니다.")
 elif delivery.empty:
     st.warning("⚠️ 배달 데이터(delivery.csv) 로드에 실패했습니다. '소비 및 마케팅 전략' 탭의 일부 기능이 제한됩니다.")
+elif combined_ppl.empty:
+    st.warning("⚠️ 인구 이동 데이터(ppl_2012.csv, ppl_2014.csv) 로드에 실패했습니다. '상관관계 및 입지 전략' 탭의 인구 분석 기능이 제한됩니다.")
 
 
 # --- 사이드바 필터 설정 ---
@@ -406,7 +431,7 @@ with tab2:
             """
             - **핵심 관계:** 시각화 결과, **미세먼지 농도가 '나쁨' 이상으로 높아질수록 대중교통 이용 건수가 감소하거나 증가율이 둔화되는 패턴**이 보일 수 있습니다 (시민들이 외출을 자제하고 실내 활동을 선호).
             - **PR 전략 최적화:** - **고농도 예상 시기 (PM10 '나쁨' 이상):** 시민들이 외출을 가장 주저하는 시점입니다. 이 시기에 맞춰 **지하철역과 버스 정거장** 등 대중교통 시설 내부에 **'실내 마스크 착용', '공기청정 대피소 안내'** 등 건강/안전 리스크 관련 포스터를 집중 홍보해야 합니다. 외출 자제를 유도하는 것이 아닌, **'필수 이동 시 안전 수칙'**을 타겟팅하여 홍보 효과를 극대화할 수 있습니다.
-                - **회복기 (PM10 '보통' 이하로 전환):** 외출 수요가 회복되는 시기를 예측하여, **'맑은 공기와 함께하는 야외 활동'**을 주제로 한 캠페인 포스터를 대중교통 외부에 게재하여 심리적 회복을 유도하는 PR 전략을 수립할 수 있습니다.
+              - **회복기 (PM10 '보통' 이하로 전환):** 외출 수요가 회복되는 시기를 예측하여, **'맑은 공기와 함께하는 야외 활동'**을 주제로 한 캠페인 포스터를 대중교통 외부에 게재하여 심리적 회복을 유도하는 PR 전략을 수립할 수 있습니다.
             """
         )
 
@@ -500,7 +525,7 @@ with tab4:
     st.header("4. PM10, 교통, 배달/소비 간의 상관관계 및 미래 입지 전략")
     st.markdown("주요 지표 간의 상관관계를 분석하고, 먼 미래의 환경 변화를 고려한 기업의 입지 및 인프라 투자 전략에 대한 인사이트를 도출합니다.")
 
-    # 1. 상관관계 분석
+    # 1. 상관관계 분석 (기존 로직 유지)
     st.subheader("주요 지표 간의 상관관계 (자치구별 평균 기준)")
     
     # 데이터프레임 병합 (교집합 기준)
@@ -541,18 +566,76 @@ with tab4:
         plt.tight_layout()
         st.pyplot(fig)
     elif not corr_df_gu.empty and len(corr_df_gu) < 2:
-         st.warning("상관관계를 분석하기에 선택된 자치구 수가 충분하지 않습니다 (최소 2개 이상 필요).")
+           st.warning("상관관계를 분석하기에 선택된 자치구 수가 충분하지 않습니다 (최소 2개 이상 필요).")
     else:
         st.warning("선택된 조건에 해당하는 상관관계 데이터가 부족합니다.")
 
     st.markdown("---")
-    st.subheader("미래 예측 기반 입지 및 인프라 전략 (인사이트)")
+    
+    # 2. 인구 이동 변화와 PM10 연계 분석 (새로운 섹션)
+    st.subheader("인구 이동 변화와 PM10 농도 연계 분석 (장기 입지 전략)")
+    
+    if not combined_ppl.empty and not pol_filt.empty:
+        # 2012년 대비 2014년 인구 이동 건수 변화 계산
+        ppl_2012_pivot = combined_ppl[combined_ppl['Year'] == '2012'].set_index('자치구')['인구_이동_건수']
+        ppl_2014_pivot = combined_ppl[combined_ppl['Year'] == '2014'].set_index('자치구')['인구_이동_건수']
+        
+        # 변화량 (2014 - 2012)
+        ppl_change = (ppl_2014_pivot - ppl_2012_pivot).rename("인구_이동_변화량")
+        
+        # 현재 선택된 연도의 평균 PM10 농도 사용
+        pm10_long_term_avg = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().rename("평균_PM10")
+        
+        # 데이터 통합
+        ppl_pm10_comp = pd.concat([ppl_change, pm10_long_term_avg], axis=1).dropna()
+        
+        if not ppl_pm10_comp.empty and len(ppl_pm10_comp) >= 2:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # 산점도 생성
+            sns.scatterplot(
+                data=ppl_pm10_comp, 
+                x='평균_PM10', 
+                y='인구_이동_변화량', 
+                ax=ax, 
+                s=100, # 마커 크기
+                color='purple'
+            )
+            
+            # 자치구 라벨 추가 (시각적 판단을 돕기 위해)
+            for gu, row in ppl_pm10_comp.iterrows():
+                ax.text(row['평균_PM10'] * 1.01, row['인구_이동_변화량'], gu, fontsize=9)
+            
+            # 평균선 추가
+            ax.axvline(ppl_pm10_comp['평균_PM10'].mean(), color='r', linestyle='--', linewidth=1, label='평균 PM10')
+            ax.axhline(0, color='k', linestyle='-', linewidth=1, label='인구 변화량 0')
+            
+            ax.set_title("PM10 농도와 인구 이동 건수 변화량 관계 (2014년 - 2012년 기준)", fontsize=14)
+            ax.set_xlabel(f"평균 PM10 농도 (선택 연도 기준)", fontsize=12)
+            ax.set_ylabel("인구 이동 건수 변화량 (2014 - 2012)", fontsize=12)
+            ax.legend(loc='lower left')
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # 분석 인사이트
+            st.markdown(
+                """
+                - **핵심 관계:** 이 산점도를 통해 **평균 PM10 농도가 높은 지역일수록 인구 이동 건수 변화량(감소 또는 증가 둔화)이 음의 값(인구 유출 경향)을 보이는지** 장기적인 관점에서 분석할 수 있습니다.
+                - **입지 전략 재검토:** 만약 PM10이 높고 인구 변화량이 낮은(음수인) 사분면에 위치한 자치구가 있다면, 해당 지역은 장기적으로 거주 매력이 감소하고 있음을 시사합니다. 기업은 이 지역에 **새로운 인프라 투자를 신중하게 고려**하거나, 혹은 **공기질 개선 등 환경 요소를 고려한 차별화된 투자**를 진행해야 합니다.
+                """
+            )
+        else:
+            st.warning("인구 이동 변화 분석을 위한 데이터가 부족합니다 (자치구별 2012년/2014년 데이터 모두 필요).")
+    else:
+        st.warning("인구 이동 데이터(ppl_2012.csv, ppl_2014.csv) 로드에 문제가 있어 인구 분석을 수행할 수 없습니다.")
+        
+    st.markdown("---")
+    st.subheader("미래 예측 기반 입지 및 인프라 전략 (종합 인사이트)")
     st.markdown(
         """
-        - **입지 전략 (미세먼지 vs. 소비):** 상관관계 분석 결과 (특히 PM10과 소비/배달 지표 사이의 관계), 미세먼지 농도가 낮은 청정 지역은 야외 활동 관련 서비스(카페, 공원, 체험 시설)의 수요가 높을 가능성이 있습니다. 반면, 미세먼지 농도가 높은 지역은 배달, 실내 놀이 공간, 공기 청정 관련 상품/서비스의 수요가 높을 수 있습니다.
-        - **장기 인프라 투자:**
-            - **고농도 지역:** 실내 공기질 개선 및 환기 시스템을 갖춘 '미세먼지 대피형' 복합 상업 시설 투자.
+        - **장기 입지 전략 (미세먼지 vs. 인구):** 인구 이동 변화와 미세먼지 농도의 상관관계를 확인하여, 장기적으로 인구 유입이 예상되는 '청정 + 인구 유입' 지역에 H&B(Health & Beauty), 헬스케어, 에코투어리즘 시설 등에 집중 투자하는 전략이 유효합니다.
+        - **인프라 투자:**
+            - **고농도 지역:** 실내 공기질 개선 및 환기 시스템을 갖춘 '미세먼지 대피형' 복합 상업 시설 투자 및 실내 활동 관련 인프라(배달 거점 등) 확충.
             - **청정 지역:** 환경과 연계된 헬스케어, 에코투어리즘, 야외 스포츠 시설에 대한 인프라 투자.
-        - **인구 이동 예측 연계:** `ppl_2012.csv`, `ppl_2014.csv` 데이터는 인구 이동 패턴을 보여줍니다. 만약 특정 자치구의 미세먼지 수치가 지속적으로 높을 경우, 장기적인 인구 유출 가능성을 고려하여 입지 전략을 재검토해야 합니다. (다만, 현재 대시보드에서는 해당 데이터의 상세 분석이 포함되어 있지 않아 추가 분석이 필요합니다.)
         """
     )
