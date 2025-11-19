@@ -171,8 +171,9 @@ with tab3:
     
     common_gus = spent_avg.index.map(lambda x: reverse_translate_gus([x])[0]).intersection(seoul_gu_latlon.keys())
     pm10_avg = pol[(pol['Year'].isin(years)) & (pol['자치구'].isin(gus))].groupby('자치구')['미세먼지(PM10)'].mean().reindex(common_gus)
-    demo_delivery_vol = spent_avg.loc[translate_gus(common_gus)] / spent_avg.max() * 200
-    
+    common_gus_eng = translate_gus(common_gus)
+    demo_delivery_vol = spent_avg.loc[common_gus_eng] / spent_avg.max() * 200
+
     deliv_map = pd.DataFrame({
         "lat": [seoul_gu_latlon[g][0] for g in common_gus],
         "lon": [seoul_gu_latlon[g][1] for g in common_gus],
