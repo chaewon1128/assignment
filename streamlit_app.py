@@ -173,38 +173,43 @@ with tab3:
 
     # Spending - Delivery Map
     st.subheader("PM10, Delivery, and Spending – District Map")
-    # Cross-section for selected year
-    pm10_summary = pol[(pol["Year"] == sel_year) & (pol["자치구"].isin(GUS))].groupby("자치구")["미세먼지(PM10)"].mean()
-    spent_summary = spent[(spent["Year"] == sel_year)].groupby("자치구")["지출_총금액"].mean()
-    # We'll generate a mock delivery volume per district w/ spending for demo
-    demo_delivery_vol = spent_summary / spent_summary.max() * 200  # scale for visualization
-    deliv_map = pd.DataFrame({
-        "lat": [seoul_gu_latlon.get(g, (0,0))[0] for g in spent_summary.index],
-        "lon": [seoul_gu_latlon.get(g, (0,0))[1] for g in spent_summary.index],
-        "PM10": pm10_summary,
-        "Spending": spent_summary,
-        "Delivery": demo_delivery_vol
-    })
-    deliv_map["pm_color"] = deliv_map["PM10"].apply(
-        lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117]
-    )
-    layer2 = pdk.Layer(
-        "ScatterplotLayer",
-        data=deliv_map,
-        get_position='[lon, lat]',
-        get_radius='Delivery+1000',
-        get_fill_color='pm_color',
-        pickable=True,
-    )
-    st.pydeck_chart(pdk.Deck(
-        layers=[layer2],
-        initial_view_state=pdk.ViewState(37.5665,126.9780, zoom=10),
-        tooltip={"text":"{Spending:.0f}₩\nPM10: {PM10:.1f}\nDelivery Index: {Delivery:.0f}"}
-    ))
-    st.caption(
-        "Use this map: As PM10 worsens, delivery increases. "
-        "Forecast bad air periods for marketing/sale days, or to boost delivery stock management."
-    )
+
+# 필터링 및 공통 자치구 리스트 생성
+common_gus = spent_summary.index.intersection(seoul_gu_latlon.keys())
+pm10_summary_ = pm10_summary.loc[common_gus]
+spent_summary_ = spent_summary.loc[common_gus]
+demo_delivery_vol_ = demo_delivery_vol.loc[common_gus]
+
+deliv_map = pd.DataFrame({
+    "lat": [seoul_gu_latlon[g][0] for g in common_gus],
+    "lon": [seoul_gu_latlon[g][1] for g in common_gus],
+    "PM10": pm10_summary_.values,
+    "Spending": spent_summary_.values,
+    "Delivery": demo_delivery_vol_.values
+})
+
+deliv_map["pm_color"] = deliv_map["PM10"].apply(
+    lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117]
+)
+
+layer2 = pdk.Layer(
+    "ScatterplotLayer",
+    data=deliv_map,
+    get_position='[lon, lat]',
+    get_radius='Delivery + 1000',
+    get_fill_color='pm_color',
+    pickable=True,
+)
+st.pydeck_chart(pdk.Deck(
+    layers=[layer2],
+    initial_view_state=pdk.ViewState(37.5665,126.9780, zoom=10),
+    tooltip={"text": "{Spending:.0f}₩\nPM10: {PM10:.1f}\nDelivery Volume: {Delivery:.0f}"}
+))
+
+st.caption(
+    "As PM10 worsens, delivery volume increases. "
+    "Use this map to strategize stocking and promotions according to air quality."
+)
 
 # ===== 4. CORRELATIONS & INSIGHTS TAB ===== #
 with tab4:
