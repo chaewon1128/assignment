@@ -505,7 +505,7 @@ with tab3:
             initial_view_state=initial_view_state,
             tooltip=[
     alt.Tooltip("자치구", title="자치구"),
-    alt.Tooltip("PM10", title="PM10", format=".1f"),
+    alt.Tooltip("PM10", title="PM10", format=",.1f"),
     alt.Tooltip("Avg_Spending", title="평균 지출액", format=",.0f")
 ]
         ))
