@@ -7,6 +7,8 @@ import pydeck as pdk
 import os
 import itertools # for combining population data
 
+st.title("[서울 대기질 & 라이프스타일 분석 대시보드]") 
+
 # Streamlit 페이지 설정: 전체 레이아웃을 넓게 사용하도록 설정합니다.
 st.set_page_config(page_title="서울 대기질 & 라이프스타일 분석 대시보드", layout="wide")
 
