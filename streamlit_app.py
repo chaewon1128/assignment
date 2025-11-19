@@ -93,7 +93,9 @@ else:
 st.subheader("💰 상권별 분기 지출 현황")
 spent_filtered = spent[(spent['자치구'].isin(selected_gus)) & (spent['기준_년분기_코드'] < 20241)]
 spent_filtered['년월'] = spent_filtered['기준_년분기_코드'].astype(str).apply(lambda x: x[:-1]+'0'+x[-1] if len(x)==5 else x)
-pivot_spent = spent_filtered.pivot(index='년월', columns='자치구', values='지출_총금액')
+pivot_spent = spent_filtered.pivot_table(
+    index='년월', columns='자치구', values='지출_총금액', aggfunc='sum'
+)
 st.line_chart(pivot_spent)
 
 # === 배달 외식 매출 추이 ===
