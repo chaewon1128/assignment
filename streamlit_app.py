@@ -3,10 +3,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 import pydeck as pdk
 
+# Set wide layout and page title
 st.set_page_config(page_title="Seoul Air Quality & Lifestyle Dashboard", layout="wide")
+
+# Display a large title
+st.markdown("# Seoul Air Quality & Lifestyle Analysis Dashboard")
 
 files_needed = ["spent.csv", "ppl_2012.csv", "ppl_2014.csv",
                 "delivery.csv", "combined_pol.csv", "trans.csv"]
@@ -116,7 +119,6 @@ with tab1:
     
     avg_pm10 = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().sort_values(ascending=False)
     colors = ['#aad0f7' if v <= 30 else '#85e085' if v <= 80 else '#ffb347' if v <= 150 else '#ff7675' for v in avg_pm10]
-    fig = go.Figure()
     fig = px.bar(x=translate_gus(avg_pm10.index), y=avg_pm10.values, color=avg_pm10.values,
                  color_continuous_scale=['#aad0f7', '#85e085', '#ffb347', '#ff7675'])
     fig.update_layout(title='Average PM10 by District',
@@ -171,14 +173,13 @@ with tab3:
     
     common_gus = spent_avg.index.map(lambda x: reverse_translate_gus([x])[0]).intersection(seoul_gu_latlon.keys())
     pm10_avg = pol[(pol['Year'].isin(years)) & (pol['자치구'].isin(gus))].groupby('자치구')['미세먼지(PM10)'].mean().reindex(common_gus)
-    common_gus_eng = translate_gus(common_gus)
-    demo_delivery_vol = spent_avg.loc[common_gus_eng] / spent_avg.max() * 200
-
+    demo_delivery_vol = spent_avg.loc[common_gus] / spent_avg.max() * 200  # Use common_gus, avoid translation here
+    
     deliv_map = pd.DataFrame({
         "lat": [seoul_gu_latlon[g][0] for g in common_gus],
         "lon": [seoul_gu_latlon[g][1] for g in common_gus],
         "PM10": pm10_avg.values,
-        "Spending": spent_avg.loc[translate_gus(common_gus)].values,
+        "Spending": spent_avg.loc[common_gus].values,
         "Delivery": demo_delivery_vol.values
     })
     
