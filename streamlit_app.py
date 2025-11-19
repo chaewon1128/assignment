@@ -503,7 +503,7 @@ with tab3:
         st.pydeck_chart(pdk.Deck(
             layers=[layer3], 
             initial_view_state=initial_view_state,
-            tooltip={"text": f"{자치구}\nPM10: {PM10:.1f}\n평균 지출액: {Avg_Spending:.0f}₩"}
+            tooltip = {"text": "%{customdata[0]}<br>PM10: %{customdata[1]:.1f}<br>평균 지출액: %{customdata[2]:.0f}₩"}        ))
         ))
         st.caption("원의 크기는 평균 지출액(배달 수요 대리 지표), 색상은 PM10 농도 상태를 나타냅니다.")
     else:
