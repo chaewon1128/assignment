@@ -5,10 +5,19 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pydeck as pdk
 import os
-import itertools # for combining population data
-!apt-get -qq -y install fonts-nanum
-import matplotlib.font_manager as fm
-plt.rc('font', family='NanumGothic')
+
+import matplotlib.pyplot as plt
+
+plt.rcParams['font.family'] = 'Malgun Gothic'     # Windows
+plt.rcParams['axes.unicode_minus'] = False        # 마이너스 깨짐 방지
+
+# macOS 사용자라면 아래로 변경(한 줄만 선택):
+plt.rcParams['font.family'] = 'AppleGothic'
+# 또는 한글이 확실히 지원되는 나눔고딕:
+plt.rcParams['font.family'] = 'NanumGothic'
+
+# Linux 또는 Colab에서:
+plt.rcParams['font.family'] = 'NanumGothic'
 
 st.title("[PR 관점에서 본 서울 미세먼지 농도의 영향 분석 대시보드]")
 # Streamlit 페이지 설정: 전체 레이아웃을 넓게 사용하도록 설정합니다.
