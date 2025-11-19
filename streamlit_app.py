@@ -18,6 +18,20 @@ st.markdown(
 )
 
 @st.cache_data
+import os
+import streamlit as st
+
+files_needed = [
+    "combined_pol.csv", "ppl_2012.csv", "ppl_2014.csv",
+    "trans.csv", "spent.csv", "배달외식_매출건수_2020년_1월.csv"
+]
+st.write("현재 실행 디렉토리 파일 목록:", os.listdir('.'))
+
+for f in files_needed:
+    if not os.path.exists(f):
+        st.error(f"파일이 누락되었거나 경로가 다릅니다: {f}")
+
+# 이후 기존의 데이터 로딩/분석 코드 작성
 def load_data():
     pol = pd.read_csv("combined_pol.csv")
     ppl_2012 = pd.read_csv("ppl_2012.csv")
