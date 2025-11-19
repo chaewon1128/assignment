@@ -28,6 +28,15 @@ pol = pol.dropna(subset=['Date'])
 pol['Year'] = pol['Date'].dt.year.astype(str)
 pol['Month'] = pol['Date'].dt.month.astype(str).str.zfill(2)
 
+# 1. Year 리스트 생성
+YEARS = sorted(pol['Year'].unique())
+
+# 2. 빈 리스트 체크 후 기본값 설정
+default_year = YEARS[-1] if len(YEARS) > 0 else '2021'  # '2021'은 임의 기본값
+
+# 3. select_years 함수 호출
+years_tab1 = select_years("tab1_year", default=[default_year])
+
 spent['Year'] = spent['기준_년분기_코드'].astype(str).str[:4]
 
 trans['Date'] = pd.to_datetime(trans['기준_날짜'], errors='coerce')
