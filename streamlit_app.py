@@ -6,14 +6,19 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pydeck as pdk
 
-st.set_page_config(page_title="Seoul Air Quality Dashboard", layout="wide")
+# Page config
+st.set_page_config(page_title="Seoul Air Quality & Lifestyle Dashboard", layout="wide")
 
-files_needed = ["spent.csv", "ppl_2012.csv", "ppl_2014.csv", "delivery.csv", "combined_pol.csv", "trans.csv"]
-for f in files_needed:
-    if not os.path.exists(f):
-        st.error(f"File missing: {f}")
+# Files check
+files_needed = ["spent.csv", "ppl_2012.csv", "ppl_2014.csv",
+                "delivery.csv", "combined_pol.csv", "trans.csv"]
 
-# ------------ Data Loading ------------
+missing_files = [f for f in files_needed if not os.path.exists(f)]
+if missing_files:
+    st.error(f"Missing files: {missing_files}")
+    st.stop()
+
+# Load data
 spent = pd.read_csv("spent.csv")
 ppl_2012 = pd.read_csv("ppl_2012.csv")
 ppl_2014 = pd.read_csv("ppl_2014.csv")
@@ -21,233 +26,173 @@ delivery = pd.read_csv("delivery.csv")
 pol = pd.read_csv("combined_pol.csv")
 trans = pd.read_csv("trans.csv")
 
+# Preprocess
 YEARS = ['2019', '2020', '2021', '2022']
-GUS = sorted(list(set(pol[pol['자치구'] != '평균']['자치구'])))
 pol['Year'] = pol['일시'].astype(str).str[:4]
 pol['Date'] = pd.to_datetime(pol['일시'])
-delivery['Date'] = pd.to_datetime(delivery['Date'])
 spent['Year'] = spent['기준_년분기_코드'].astype(str).str[:4]
 trans['Year'] = trans['기준_날짜'].astype(str).str[:4]
 trans['Date'] = pd.to_datetime(trans['기준_날짜'])
+delivery['Date'] = pd.to_datetime(delivery['Date'])
 
-# ------------- Sidebar -------------
+GUS = sorted(list(set(pol[pol['자치구'] != '평균']['자치구'])))
+
+# Sidebar filters
 with st.sidebar:
-    st.header("Filter")
-    sel_year = st.selectbox("Year", YEARS, index=YEARS.index('2021'))
-    sel_gu = st.multiselect("Districts", GUS, default=['강남구', '종로구', '송파구'])
-    st.info("Filter data and charts by Year and District.")
+    st.header("Filters")
+    selected_year = st.selectbox("Select Year", YEARS, index=2)
+    selected_gus = st.multiselect("Select Districts", GUS, default=GUS[:5])
+    st.markdown("Use filters to explore the data.")
 
-# ============ TAB UI ============= #
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Air Quality Trends",
-    "Air & Mobility",
-    "Delivery & Spending",
-    "Correlations & Insights",
-    "Download Data"
-])
+# Define district lat-lon for map
+seoul_gu_latlon = {
+    'Gangnam-gu': (37.5172, 127.0473), 'Gangdong-gu': (37.5301, 127.1237), 'Gangbuk-gu': (37.6396, 127.0256),
+    'Gangseo-gu': (37.5509, 126.8495), 'Gwanak-gu': (37.4781, 126.9516), 'Gwangjin-gu': (37.5386, 127.0823),
+    'Guro-gu': (37.4954, 126.8581), 'Geumcheon-gu': (37.4600, 126.9002), 'Nowon-gu': (37.6544, 127.0568),
+    'Dobong-gu': (37.6688, 127.0477), 'Dongdaemun-gu': (37.5744, 127.0396), 'Dongjak-gu': (37.5124, 126.9396),
+    'Mapo-gu': (37.5634, 126.9087), 'Seodaemun-gu': (37.5792, 126.9368), 'Seocho-gu': (37.4837, 127.0324),
+    'Seongdong-gu': (37.5633, 127.0363), 'Seongbuk-gu': (37.6061, 127.0220), 'Songpa-gu': (37.5145, 127.1067),
+    'Yangcheon-gu': (37.5169, 126.8666), 'Yeongdeungpo-gu': (37.5264, 126.8963), 'Yongsan-gu': (37.5326, 126.9907),
+    'Eunpyeong-gu': (37.6176, 126.9227), 'Jongno-gu': (37.5735, 126.9797), 'Jung-gu': (37.5636, 126.9976),
+    'Jungnang-gu': (37.6063, 127.0926)
+}
 
-# ===== 1. AIR QUALITY TRENDS TAB ===== #
+# Filter data by user selection
+pol_filtered = pol[(pol['Year'] == selected_year) & (pol['자치구'].isin(selected_gus))]
+spent_filtered = spent[(spent['Year'] == selected_year) & (spent['자치구'].isin(selected_gus))]
+trans_filtered = trans[(trans['Year'] == selected_year) & (trans['자치구'].isin(selected_gus))]
+
+# Tabs for structured navigation
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Air Quality", "Mobility & Behavior", "Delivery & Spending","Correlations & Insights", "Data Downloads"])
+
 with tab1:
-    st.title("Air Quality Trends")
+    st.header("Air Quality Trends")
 
-    # PM10 Line: Overall (mean per date)
-    st.subheader("Daily PM10 Trends Across Seoul")
-    pm10_sel = pol[(pol["Year"] == sel_year) & (pol["자치구"] == "평균")]
-    st.line_chart(pm10_sel.set_index('Date')["미세먼지(PM10)"])
+    # Daily PM10 average line chart (all Seoul average)
+    seoul_avg = pol_filtered[pol_filtered['자치구'] == '평균']
+    if not seoul_avg.empty:
+        st.line_chart(seoul_avg.set_index('Date')['미세먼지(PM10)'], height=250, use_container_width=True)
+        st.caption("Daily average PM10 for Seoul")
+    else:
+        st.info("No average PM10 data for selected year.")
 
-    st.caption(
-        "Daily average PM10 levels for all of Seoul. "
-        "Gray band: Good (0–30), Green: Moderate (31–80), Orange: Bad (81–150), Red: Very Bad (151+)."
-    )
+    # PM10 by district - bar chart of mean
+    pm10_mean = pol_filtered.groupby('자치구')['미세먼지(PM10)'].mean()
+    st.bar_chart(pm10_mean)
 
-    # PM10 Line: By District
-    st.subheader("PM10 Levels by District")
-    district_data = pol[(pol["Year"] == sel_year) & (pol["자치구"].isin(sel_gu))]
-    fig, ax = plt.subplots(figsize=(12,5))
-    color_map = { 'Good':'#AACCF7', 'Moderate':'#85E085', 'Bad':'#FFB347', 'Very Bad':'#FF7675' }
-    for gu in sel_gu:
-        y = district_data[district_data["자치구"] == gu].sort_values("Date")
-        pm10 = y["미세먼지(PM10)"]
-        color_cats = ["Good" if v<=30 else "Moderate" if v<=80 else "Bad" if v<=150 else "Very Bad" for v in pm10]
-        ax.plot(y["Date"], pm10, label=gu)
-    ax.set_ylabel("PM10 (μg/m³)")
-    ax.set_xlabel("Date")
-    ax.legend()
-    st.pyplot(fig, use_container_width=True)
-    st.caption(
-        "Colored backgrounds: Good, Moderate, Bad, Very Bad PM10 per official categories. "
-        "Look for peaks, duration of 'Very Bad', and compare districts."
-    )
+    # PM10 map
+    map_df = pm10_mean.reset_index()
+    map_df = map_df[map_df['자치구'].isin(seoul_gu_latlon.keys())]
+    map_df['lat'] = map_df['자치구'].map(lambda x: seoul_gu_latlon[x][0])
+    map_df['lon'] = map_df['자치구'].map(lambda x: seoul_gu_latlon[x][1])
+    map_df['color'] = map_df['미세먼지(PM10)'].apply(
+        lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117])
 
-    # PM10 Map: District-wise
-    st.subheader("District Mean PM10 – Map")
-    seoul_gu_latlon = {
-        'Gangnam-gu': (37.5172,127.0473), 'Gangdong-gu': (37.5301,127.1237), 'Gangbuk-gu': (37.6396,127.0256),
-        'Gangseo-gu': (37.5509,126.8495), 'Gwanak-gu': (37.4781,126.9516), 'Gwangjin-gu': (37.5386,127.0823),
-        'Guro-gu': (37.4954,126.8581), 'Geumcheon-gu': (37.4600,126.9002), 'Nowon-gu': (37.6544,127.0568),
-        'Dobong-gu': (37.6688,127.0477), 'Dongdaemun-gu': (37.5744,127.0396), 'Dongjak-gu': (37.5124,126.9396),
-        'Mapo-gu': (37.5634,126.9087), 'Seodaemun-gu': (37.5792,126.9368), 'Seocho-gu': (37.4837,127.0324),
-        'Seongdong-gu': (37.5633,127.0363), 'Seongbuk-gu': (37.6061,127.0220), 'Songpa-gu': (37.5145,127.1067),
-        'Yangcheon-gu': (37.5169,126.8666), 'Yeongdeungpo-gu': (37.5264,126.8963), 'Yongsan-gu': (37.5326,126.9907),
-        'Eunpyeong-gu': (37.6176,126.9227), 'Jongno-gu': (37.5735,126.9797), 'Jung-gu': (37.5636,126.9976), 'Jungnang-gu': (37.6063,127.0926)
-    }
-    map_df = pol[(pol["Year"] == sel_year) & (pol["자치구"].isin(GUS))].groupby("자치구")["미세먼지(PM10)"].mean().reset_index()
-    map_df["lat"] = map_df["자치구"].map(lambda x: seoul_gu_latlon.get(x, (0,0))[0])
-    map_df["lon"] = map_df["자치구"].map(lambda x: seoul_gu_latlon.get(x, (0,0))[1])
-    map_df["pm_color"] = map_df["미세먼지(PM10)"].apply(
-        lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117]
-    )
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=map_df,
         get_position='[lon, lat]',
         get_radius=3000,
-        get_fill_color='pm_color',
+        get_fill_color='color',
         pickable=True,
     )
-    st.pydeck_chart(
-        pdk.Deck(
-            layers=[layer],
-            initial_view_state=pdk.ViewState(37.5665,126.9780,zoom=10),
-            tooltip={"text": "{자치구}: {미세먼지(PM10)} μg/m³"}
-        )
-    )
+    view_state = pdk.ViewState(latitude=37.5665, longitude=126.9780, zoom=10)
+    st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state, tooltip={"text": "{자치구}\nPM10: {미세먼지(PM10):.1f}"}))
 
-# ===== 2. AIR QUALITY & MOBILITY ===== #
 with tab2:
-    st.title("Air Quality & Mobility")
-    st.markdown("""
-    - You can check the relationship between air quality, floating population, and metro/bus ridership.
-    - Useful for planning poster campaigns near stations: choose 'high air pollution' periods for stronger outreach!
-    """)
+    st.header("Mobility & Behavior")
 
-    # Trends: PM10 & Mobility overlay for selected districts
-    st.subheader("PM10 vs Floating Population (by District)")
-    # 2012-2014 only, for floating population
-    comp_ppl_2012 = ppl_2012.set_index("거주지").reindex(sel_gu)["개수"].fillna(0)
-    comp_ppl_2014 = ppl_2014.set_index("거주지").reindex(sel_gu)["개수"].fillna(0)
-    comp = pd.DataFrame({"2012": comp_ppl_2012, "2014": comp_ppl_2014})
+    # Floating population comparison 2012 vs 2014
+    st.subheader("Floating Population by District (2012 vs 2014)")
+    ppl_2012_sel = ppl_2012[ppl_2012['거주지'].isin(selected_gus)].set_index('거주지')['개수']
+    ppl_2014_sel = ppl_2014[ppl_2014['거주지'].isin(selected_gus)].set_index('거주지')['개수']
+    ppl_df = pd.DataFrame({"2012": ppl_2012_sel, "2014": ppl_2014_sel}).fillna(0)
+    st.bar_chart(ppl_df)
 
-    fig5, ax5 = plt.subplots(figsize=(10,5))
-    width = 0.35
-    ax5.bar(comp.index, comp["2012"], width, label='2012')
-    ax5.bar(comp.index, comp["2014"], width, bottom=comp["2012"], label='2014', alpha=0.75)
-    ax5.set_ylabel("Population")
-    plt.xticks(rotation=45)
-    ax5.legend()
-    st.pyplot(fig5, use_container_width=True)
-    st.caption("Compare floating population by district in 2012 and 2014.")
+    # Public transport usage heatmap
+    trans_grouped = trans_filtered.groupby('자치구')['승객_수'].sum()
+    st.subheader("Total Public Transport Usage by District")
+    fig, ax = plt.subplots(figsize=(12,4))
+    sns.barplot(x=trans_grouped.index, y=trans_grouped.values, ax=ax)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+    ax.set_xlabel("District")
+    ax.set_ylabel("Passengers")
+    st.pyplot(fig)
 
-    # PM10 vs Metro/Bus usage
-    st.subheader("PM10 vs Public Transport Ridership")
-    # For speed, we aggregate by district and year
-    trans_y = trans[trans["Year"] == sel_year]
-    gu_pm = pol[(pol['Year'] == sel_year) & (pol['자치구'].isin(sel_gu))].groupby("자치구")['미세먼지(PM10)'].mean()
-    gu_tr = trans_y[trans_y['자치구'].isin(sel_gu)].groupby("자치구")["승객_수"].mean()
-    plt.figure(figsize=(10,6))
-    fig6, ax6 = plt.subplots()
-    color_pm = gu_pm.values
-    scatter = ax6.scatter(gu_pm, gu_tr, c=color_pm, cmap="RdYlGn_r", s=110, edgecolor='k')
-    for x, y, gu in zip(gu_pm, gu_tr, gu_tr.index):
-        ax6.text(x, y, gu, fontsize=8, alpha=0.8)
-    ax6.set_xlabel("Mean PM10 (μg/m³)")
-    ax6.set_ylabel("Avg. Ridership")
-    fig6.colorbar(scatter, label="PM10")
-    plt.title("District-wise PM10 vs Ridership")
-    st.pyplot(fig6, use_container_width=True)
-    st.caption("Correlation: When PM10 surges, people may use less public transit. Posters near stations can encourage mask usage and health awareness during bad air days.")
-
-# ===== 3. DELIVERY & SPENDING TAB ===== #
 with tab3:
-    st.title("Delivery & Consumer Spending vs PM10")
-    st.markdown("""
-    - Air quality → Delivery volume and overall consumer spending.
-    - Darker colors: Poorer air; Bubbles: Higher delivery. Use this map to optimize campaigns and stocking!
-    """)
+    st.header("Delivery & Spending Patterns")
 
-    # PM10 vs Delivery (if delivery only has full-Seoul, use line graph by day/year)
-    if "전체" in delivery.columns:
-        st.subheader("Daily Delivery Volume (Seoul Total)")
-        st.line_chart(delivery.set_index("Date")["전체"])
-        st.caption("Delivery spikes can correspond with higher PM10.")
+    # Delivery volume line chart
+    if '전체' in delivery.columns:
+        st.subheader("Delivery Volume (Total Seoul)")
+        st.line_chart(delivery.set_index('Date')['전체'])
 
-    # Spending - Delivery Map
-    st.subheader("PM10, Delivery, and Spending – District Map")
+    # Spending by district bar chart
+    st.subheader("Total Spending by District")
+    spent_grouped = spent_filtered.groupby('자치구')['지출_총금액'].mean()
+    st.bar_chart(spent_grouped)
 
-# 필터링 및 공통 자치구 리스트 생성
-common_gus = spent_summary.index.intersection(seoul_gu_latlon.keys())
-pm10_summary_ = pm10_summary.loc[common_gus]
-spent_summary_ = spent_summary.loc[common_gus]
-demo_delivery_vol_ = demo_delivery_vol.loc[common_gus]
+    # Delivery + PM10 map visualization (demo scaled delivery)
+    demo_delivery_vol = spent_grouped / spent_grouped.max() * 200
+    common_gus = spent_grouped.index.intersection(seoul_gu_latlon.keys())
+    spent_grouped = spent_grouped.loc[common_gus]
+    pm10_map = pol_filtered.groupby('자치구')['미세먼지(PM10)'].mean().loc[common_gus]
+    demo_delivery_vol = demo_delivery_vol.loc[common_gus]
+    deliv_map = pd.DataFrame({
+        "lat": [seoul_gu_latlon[d][0] for d in common_gus],
+        "lon": [seoul_gu_latlon[d][1] for d in common_gus],
+        "PM10": pm10_map.values,
+        "Spending": spent_grouped.values,
+        "Delivery": demo_delivery_vol.values
+    })
+    deliv_map["pm_color"] = deliv_map["PM10"].apply(
+        lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117]
+    )
+    layer2 = pdk.Layer(
+        "ScatterplotLayer",
+        data=deliv_map,
+        get_position='[lon, lat]',
+        get_radius='Delivery + 1000',
+        get_fill_color='pm_color',
+        pickable=True
+    )
+    view_state = pdk.ViewState(latitude=37.5665, longitude=126.9780, zoom=10)
+    st.pydeck_chart(pdk.Deck(layers=[layer2], initial_view_state=view_state,
+                            tooltip={"text": "{Spending:.0f}₩\nPM10: {PM10:.1f}\nDelivery: {Delivery:.0f}"}))
+    st.caption("Delivery volume and spending by district relative to air pollution.\nUse this for inventory and marketing strategies.")
 
-deliv_map = pd.DataFrame({
-    "lat": [seoul_gu_latlon[g][0] for g in common_gus],
-    "lon": [seoul_gu_latlon[g][1] for g in common_gus],
-    "PM10": pm10_summary_.values,
-    "Spending": spent_summary_.values,
-    "Delivery": demo_delivery_vol_.values
-})
-
-deliv_map["pm_color"] = deliv_map["PM10"].apply(
-    lambda v: [170,204,247] if v<=30 else [133,224,133] if v<=80 else [255,179,71] if v<=150 else [255,118,117]
-)
-
-layer2 = pdk.Layer(
-    "ScatterplotLayer",
-    data=deliv_map,
-    get_position='[lon, lat]',
-    get_radius='Delivery + 1000',
-    get_fill_color='pm_color',
-    pickable=True,
-)
-st.pydeck_chart(pdk.Deck(
-    layers=[layer2],
-    initial_view_state=pdk.ViewState(37.5665,126.9780, zoom=10),
-    tooltip={"text": "{Spending:.0f}₩\nPM10: {PM10:.1f}\nDelivery Volume: {Delivery:.0f}"}
-))
-
-st.caption(
-    "As PM10 worsens, delivery volume increases. "
-    "Use this map to strategize stocking and promotions according to air quality."
-)
-
-# ===== 4. CORRELATIONS & INSIGHTS TAB ===== #
 with tab4:
-    st.title("Correlations, Insights & Policy Ideas")
-    st.markdown("""
-    - This heatmap shows the correlations among average PM10, consumer spending, transit ridership, and floating populations (per district/year).
-    - **Insight:** High PM10 → More delivery, less outdoor activity. Position delivery-centric eateries near big stations!
-    - PM10 Class coloring: Good / Moderate / Bad / Very Bad.
-    """)
+    st.header("Correlations & Insights")
 
-    YEARS_NUM = [2019,2020,2021,2022]
-    pm_year_gu = pol[(pol["Year"].isin([str(y) for y in YEARS_NUM])) & (pol["자치구"] != "평균")].groupby(['Year','자치구'])["미세먼지(PM10)"].mean().unstack()
-    spent_year_gu = spent[spent["Year"].isin([str(y) for y in YEARS_NUM])].groupby(['Year','자치구'])["지출_총금액"].mean().unstack()
-    trans_year_gu = trans[trans["Year"].isin([str(y) for y in YEARS_NUM])].groupby(['Year','자치구'])["승객_수"].mean().unstack()
+    # Correlation heatmap for averaged values
+    pm10_avg = pol_filtered.groupby('자치구')['미세먼지(PM10)'].mean()
+    spending_avg = spent_filtered.groupby('자치구')['지출_총금액'].mean()
+    transit_avg = trans_filtered.groupby('자치구')['승객_수'].sum()
+    pop_2012 = ppl_2012.set_index('거주지')['개수']
+    pop_2014 = ppl_2014.set_index('거주지')['개수']
+
     corr_df = pd.DataFrame({
-        "PM10": pm_year_gu.mean(),
-        "Spending": spent_year_gu.mean(),
-        "Transit": trans_year_gu.mean(),
-        "Population2012": ppl_2012.set_index("거주지")["개수"],
-        "Population2014": ppl_2014.set_index("거주지")["개수"],
+        "PM10": pm10_avg,
+        "Spending": spending_avg,
+        "Transit": transit_avg,
+        "Pop2012": pop_2012,
+        "Pop2014": pop_2014
     }).dropna()
+
     corr_mat = corr_df.corr()
-    fig8, ax8 = plt.subplots(figsize=(7,6))
-    sns.heatmap(corr_mat, annot=True, fmt=".2f", cmap='vlag', ax=ax8)
-    st.pyplot(fig8)
+    fig, ax = plt.subplots(figsize=(6,6))
+    sns.heatmap(corr_mat, annot=True, cmap='coolwarm', ax=ax)
+    st.pyplot(fig)
     st.markdown("""
-        - Negative correlation: High PM10 often means lower transit and lower floating population, but higher delivery.
-        - **Recommendation:** For future-proof food/retail, target locations with high transit volume—delivery franchises thrive even as air worsens.
-        - **Planning tip:** Adjust food/material stock, sale dates with air forecasts.
+    - Higher PM10 usually correlates with increased delivery activity and decreased transit and outdoor population.
+    - Future-proof planning suggests placing delivery-focused businesses near major transit hubs.
+    - Adjust inventory and promotional schedules based on air quality forecasts.
     """)
 
-# ===== 5. DOWNLOAD DATA TAB ===== #
 with tab5:
-    st.title("Download Original Data")
-    st.markdown("You can download every main dataset used for all above visualizations & analysis.")
+    st.header("Download Data")
     for fname in files_needed:
-        with open(fname, "rb") as f:
+        with open(fname, 'rb') as f:
             st.download_button(label=f'Download {fname}', data=f, file_name=fname)
 
-st.markdown("---")
-st.caption("Seoul Air Quality, Mobility & Consumption Dashboard – 2025 | by AI Assistant")
+st.caption("© 2025 Seoul Air Quality & Lifestyle Dashboard")
