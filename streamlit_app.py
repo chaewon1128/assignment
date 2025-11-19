@@ -320,9 +320,9 @@ with tab1:
         # RGB 색상을 0~1로 정규화하여 Matplotlib에 적용
         colors = [get_pm10_status(v)[1] for v in avg_pm10.values]
         ax.bar(avg_pm10.index, avg_pm10.values, color=[(c[0]/255, c[1]/255, c[2]/255) for c in colors])
-        ax.set_xlabel("자치구", fontsize=12)
-        ax.set_ylabel("평균 PM10 (μg/m³)", fontsize=12)
-        ax.set_title(f"선택 연도({', '.join(selected_years)}) 기준 자치구별 평균 PM10", fontsize=14)
+        ax.set_xlabel("district", fontsize=12)
+        ax.set_ylabel("Average PM10 (μg/m³)", fontsize=12)
+        ax.set_title(f"Average PM10 by District for the Selected Year(s) ({', '.join(selected_years)})", fontsize=14)
         plt.xticks(rotation=45, ha='right')
         plt.tight_layout()
         st.pyplot(fig) # 그래프를 Streamlit에 출력
@@ -378,16 +378,16 @@ with tab2:
 
                 # PM10 (좌측 y축)
                 ax1.plot(daily_comp_mobility['Date'], daily_comp_mobility['미세먼지(PM10)'], color='blue', label='PM10 농도')
-                ax1.set_xlabel("날짜")
+                ax1.set_xlabel("Date")
                 ax1.set_ylabel("PM10 (μg/m³)", color='blue')
                 ax1.tick_params(axis='y', labelcolor='blue')
 
                 # Transit (우측 y축)
                 ax2.plot(daily_comp_mobility['Date'], daily_comp_mobility['승객_수'], color='green', label='총 승객 수')
-                ax2.set_ylabel("총 승객 수", color='green')
+                ax2.set_ylabel("Number of Passengers", color='green')
                 ax2.tick_params(axis='y', labelcolor='green')
                 
-                ax1.set_title("PM10 농도와 대중교통 이용량 일별 변화 추이")
+                ax1.set_title("Daily Trends of PM10 Concentration and Public Transportation Usage")
                 fig.tight_layout()
                 st.pyplot(fig)
             else:
@@ -416,9 +416,9 @@ with tab2:
                     bar_colors.append((color[0]/255, color[1]/255, color[2]/255))
                 
                 ax.bar(avg_transit_by_pm10['Status'], avg_transit_by_pm10['승객_수'], color=bar_colors)
-                ax.set_xlabel("PM10 농도 상태", fontsize=12)
-                ax.set_ylabel("평균 승객 수", fontsize=12)
-                ax.set_title("PM10 상태별 대중교통 일평균 이용 건수")
+                ax.set_xlabel("PM10 Concentration Status", fontsize=12)
+                ax.set_ylabel("verage Number of Passengers", fontsize=12)
+                ax.set_title("Daily Average Public Transit Usage by PM10 Level")
                 plt.xticks(rotation=0)
                 plt.tight_layout()
                 st.pyplot(fig)
@@ -462,7 +462,7 @@ with tab3:
         ax2.set_ylabel("배달 건수 지수", color='red')
         ax2.tick_params(axis='y', labelcolor='red')
         
-        ax1.set_title(f"{year_select_tab3}년 PM10 농도와 배달 건수 지수 변화 추이")
+        ax1.set_title(f"Changes in PM10 Levels and Delivery Activity Index in {year_select_tab3}")
         fig.tight_layout()
         st.pyplot(fig)
         st.caption("PM10 농도가 높을수록(혹은 높았던 이후) 배달 건수 지수가 증가하는 경향성이 나타날 수 있습니다.")
@@ -561,7 +561,7 @@ with tab4:
         # 히트맵 시각화
         sns.heatmap(corr_mat, annot=True, cmap='vlag', ax=ax, center=0, 
                     fmt=".2f", linewidths=.5, cbar_kws={'label': 'Pearson Correlation Coefficient'})
-        ax.set_title("주요 지표 간 상관관계 분석 (자치구별 평균 기준)", fontsize=14)
+        ax.set_title("Correlation Analysis Among Key Indicators (Based on District Averages)", fontsize=14)
         ax.set_xticklabels(corr_mat.columns, rotation=45, ha='right')
         ax.set_yticklabels(corr_mat.columns, rotation=0)
         plt.tight_layout()
@@ -596,8 +596,8 @@ with tab4:
             # 산점도 생성
             sns.scatterplot(
                 data=ppl_pm10_comp, 
-                x='평균_PM10', 
-                y='인구_이동_변화량', 
+                x='Average_PM10', 
+                y='Population_Mobility_Change', 
                 ax=ax, 
                 s=100, # 마커 크기
                 color='purple'
@@ -608,12 +608,12 @@ with tab4:
                 ax.text(row['평균_PM10'] * 1.01, row['인구_이동_변화량'], gu, fontsize=9)
             
             # 평균선 추가
-            ax.axvline(ppl_pm10_comp['평균_PM10'].mean(), color='r', linestyle='--', linewidth=1, label='평균 PM10')
-            ax.axhline(0, color='k', linestyle='-', linewidth=1, label='인구 변화량 0')
+            ax.axvline(ppl_pm10_comp['평균_PM10'].mean(), color='r', linestyle='--', linewidth=1, label='Average PM10')
+            ax.axhline(0, color='k', linestyle='-', linewidth=1, label='Zero Population Change')
             
-            ax.set_title("PM10 농도와 인구 이동 건수 변화량 관계 (2014년 - 2012년 기준)", fontsize=14)
-            ax.set_xlabel(f"평균 PM10 농도 (선택 연도 기준)", fontsize=12)
-            ax.set_ylabel("인구 이동 건수 변화량 (2014 - 2012)", fontsize=12)
+            ax.set_title("Relationship Between PM10 Levels and Population Mobility Changes (2014–2012)", fontsize=14)
+            ax.set_xlabel(f"Average PM10 Concentration for the Selected Year", fontsize=12)
+            ax.set_ylabel("Change in Population Mobility (2014–2012)", fontsize=12)
             ax.legend(loc='lower left')
             plt.tight_layout()
             st.pyplot(fig)
