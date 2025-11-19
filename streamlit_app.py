@@ -34,7 +34,7 @@ trans['Date'] = pd.to_datetime(trans['기준_날짜'])
 with st.sidebar:
     st.header("Filter")
     sel_year = st.selectbox("Year", YEARS, index=YEARS.index('2021'))
-    sel_gu = st.multiselect("Districts", GUS, default=['Gangnam-gu', 'Jongno-gu', 'Songpa-gu'])
+    sel_gu = st.multiselect("Districts", GUS, default=['강남구', '종로구', '송파구'])
     st.info("Filter data and charts by Year and District.")
 
 # ============ TAB UI ============= #
