@@ -12,7 +12,7 @@ import pydeck as pdk
 # === 파일 존재 여부 체크 & 안내 ===
 files_needed = [
     "combined_pol.csv", "ppl_2012.csv", "ppl_2014.csv",
-    "trans.csv", "spent.csv", "배달외식_매출건수_2020년_1월.csv"
+    "trans.csv", "spent.csv", "delivery.csv"
 ]
 st.write("✅ 현재 작업 디렉토리 파일 목록:", os.listdir('.'))
 for f in files_needed:
@@ -37,7 +37,7 @@ def load_data():
     ppl_2014 = pd.read_csv("ppl_2014.csv")
     trans = pd.read_csv("trans.csv")
     spent = pd.read_csv("spent.csv")
-    deliver = pd.read_csv("배달외식_매출건수_2020년_1월.csv")
+    deliver = pd.read_csv("delivery.csv")
     return pol, ppl_2012, ppl_2014, trans, spent, deliver
 
 pol, ppl_2012, ppl_2014, trans, spent, deliver = load_data()
@@ -45,10 +45,8 @@ pol, ppl_2012, ppl_2014, trans, spent, deliver = load_data()
 # === 사이드바 필터 ===
 with st.sidebar:
     st.header("🔎 분석 필터")
-    # 자치구 선택
     gu_list = sorted(pol["자치구"].unique())
     selected_gus = st.multiselect("자치구 선택", gu_list, default=gu_list[:5])
-    # 연도 범위 선택
     years = st.slider("연도 범위 선택", min_value=2012, max_value=2024, value=(2019, 2023))
     st.markdown("---")
     st.info("마지막 탭에서 데이터 파일 다운로드 가능합니다.")
