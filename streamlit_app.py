@@ -33,7 +33,6 @@ delivery['Date'] = pd.to_datetime(delivery['Date'])
 
 GUS = sorted(list(set(pol[pol['자치구'] != '평균']['자치구'])))
 
-# District names mapped to English for labels (only for display)
 eng_labels = {
     '강남구': "Gangnam-gu", '강동구': "Gangdong-gu", '강북구': "Gangbuk-gu",
     '강서구': "Gangseo-gu", '관악구': "Gwanak-gu", '광진구':"Gwangjin-gu",
@@ -53,18 +52,18 @@ def reverse_translate_gus(engs):
     rev = {v:k for k,v in eng_labels.items()}
     return [rev.get(e, e) for e in engs]
 
-def select_years(default=None):
+def select_years(key:str, default=None):
     all_years = sorted(pol['Year'].unique())
     if default is None:
         default = ['2021']
-    selected = st.multiselect("Select Year(s)", all_years, default=default)
+    selected = st.multiselect(f"Select Year(s) - {key}", all_years, default=default, key=key)
     return selected
 
-def select_gus(default=None):
+def select_gus(key:str, default=None):
     opts = ["All Districts"] + GUS
     if default is None:
-        default = opts[:6]  # All + 5 districts
-    selected = st.multiselect("Select District(s)", opts, default=default)
+        default = opts[:6]
+    selected = st.multiselect(f"Select District(s) - {key}", opts, default=default, key=key)
     if "All Districts" in selected:
         return GUS
     else:
@@ -93,8 +92,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
     st.header("Air Quality Trends")
 
-    years_tab1 = select_years(default=['2021'])
-    gus_tab1 = select_gus(default=['All Districts'])
+    years_tab1 = select_years("tab1_year", default=['2021'])
+    gus_tab1 = select_gus("tab1_gu", default=['All Districts'])
 
     pol_filt = pol[(pol['Year'].isin(years_tab1)) & (pol['자치구'].isin(gus_tab1))]
 
@@ -137,8 +136,8 @@ with tab1:
 with tab2:
     st.header("Mobility & Behavior")
 
-    years_tab2 = select_years(default=['2021'])
-    gus_tab2 = select_gus(default=['All Districts'])
+    years_tab2 = select_years("tab2_year", default=['2021'])
+    gus_tab2 = select_gus("tab2_gu", default=['All Districts'])
 
     trans_filt = trans[(trans['Year'].isin(years_tab2)) & (trans['자치구'].isin(gus_tab2))]
     ppl_2012_sel = ppl_2012[ppl_2012['거주지'].isin(gus_tab2)].set_index('거주지')['개수']
@@ -161,8 +160,8 @@ with tab2:
 with tab3:
     st.header("Delivery & Spending")
 
-    years_tab3 = select_years(default=['2021'])
-    gus_tab3 = select_gus(default=['All Districts'])
+    years_tab3 = select_years("tab3_year", default=['2021'])
+    gus_tab3 = select_gus("tab3_gu", default=['All Districts'])
 
     spent_filt = spent[(spent['Year'].isin(years_tab3)) & (spent['자치구'].isin(gus_tab3))]
     spent_avg = spent_filt.groupby('자치구')['지출_총금액'].mean().reindex(gus_tab3)
@@ -183,7 +182,6 @@ with tab3:
     else:
         st.line_chart(delivery_filt.iloc[:,1])
 
-    # Map similar to before but only for filtered gus and year
     common_gus = spent_avg.index.map(lambda x: reverse_translate_gus([x])[0]).intersection(seoul_gu_latlon.keys())
     pm10_avg = pol[(pol['Year'].isin(years_tab3)) & (pol['자치구'].isin(gus_tab3))].groupby('자치구')['미세먼지(PM10)'].mean().reindex(common_gus)
     demo_delivery_vol = spent_avg.loc[translate_gus(common_gus)] / spent_avg.max() * 200
@@ -208,15 +206,15 @@ with tab3:
         get_fill_color='pm_color',
         pickable=True,
     )
-    view_state = pdk.ViewState(37.5665, 126.9780, zoom=10)
+    view_state = pdk.ViewState(latitude=37.5665, longitude=126.9780, zoom=10)
     st.pydeck_chart(pdk.Deck(layers=[layer2], initial_view_state=view_state,
                             tooltip={"text": "{Spending:.0f}₩\nPM10: {PM10:.1f}\nDelivery: {Delivery:.0f}"}))
 
 with tab4:
     st.header("Correlations & Insights")
 
-    years_tab4 = select_years(default=['2021'])
-    gus_tab4 = select_gus(default=['All Districts'])
+    years_tab4 = select_years("tab4_year", default=['2021'])
+    gus_tab4 = select_gus("tab4_gu", default=['All Districts'])
 
     pol_corr = pol[(pol['Year'].isin(years_tab4)) & (pol['자치구'].isin(gus_tab4))]
     spent_corr = spent[(spent['Year'].isin(years_tab4)) & (spent['자치구'].isin(gus_tab4))]
@@ -248,7 +246,7 @@ with tab4:
         """
         **Insights:**  
         - Higher PM10 correlates with increased delivery and spending, and decreased transit usage and floating population.  
-        - Businesses should consider locating delivery-focused stores near high transit areas to future-proof amid pollution.  
+        - Businesses should consider locating delivery-focused stores near major transit hubs to future-proof amid pollution.  
         - Use air quality forecasts for sales and inventory planning.
         """
     )
@@ -256,7 +254,7 @@ with tab4:
 with tab5:
     st.header("Download Data")
     for fname in files_needed:
-        with open(fname, "rb") as f:
+        with open(fname, 'rb') as f:
             st.download_button(label=f'Download {fname}', data=f, file_name=fname)
 
 st.caption("© 2025 Seoul Air Quality & Lifestyle Dashboard")
