@@ -116,7 +116,7 @@ with tab1:
     
     avg_pm10 = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().sort_values(ascending=False)
     colors = ['#aad0f7' if v <= 30 else '#85e085' if v <= 80 else '#ffb347' if v <= 150 else '#ff7675' for v in avg_pm10]
-    fig, ax = go.Figure()
+    fig = go.Figure()
     fig = px.bar(x=translate_gus(avg_pm10.index), y=avg_pm10.values, color=avg_pm10.values,
                  color_continuous_scale=['#aad0f7', '#85e085', '#ffb347', '#ff7675'])
     fig.update_layout(title='Average PM10 by District',
