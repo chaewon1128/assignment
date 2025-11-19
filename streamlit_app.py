@@ -296,7 +296,7 @@ with tab2:
                 ax1.set_xlabel("Date")
                 ax1.set_ylabel("PM10 (μg/m³)", color='blue')
                 ax1.tick_params(axis='y', labelcolor='blue')
-                ax2.plot(daily_comp_mobility['Date'], daily_comp_mobility['승객_수'], color='green', label='Transit Total")
+                ax2.plot(daily_comp_mobility['Date'], daily_comp_mobility['승객_수'], color='green', label='Transit Total')
                 ax2.set_ylabel("Transit Total", color='green')
                 ax2.tick_params(axis='y', labelcolor='green')
                 ax1.set_title("PM10 & Public Transit Daily Trend")
