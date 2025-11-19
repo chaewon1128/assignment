@@ -9,16 +9,6 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import pydeck as pdk
 
-# === 파일 존재 여부 체크 & 안내 ===
-files_needed = [
-    "combined_pol.csv", "ppl_2012.csv", "ppl_2014.csv",
-    "trans.csv", "spent.csv", "delivery.csv"
-]
-st.write("✅ 현재 작업 디렉토리 파일 목록:", os.listdir('.'))
-for f in files_needed:
-    if not os.path.exists(f):
-        st.error(f"❌ 파일 누락 또는 경로 문제: {f}")
-
 # === Streamlit 페이지 설정 ===
 st.set_page_config(page_title="서울 대기오염 & 생활행동 대시보드", layout="wide")
 st.title("🌏 서울 대기오염 & 생활행동 대시보드")
@@ -94,8 +84,7 @@ st.subheader("🚇 대중교통 승객 수 변화")
 trans_filtered = trans[(trans['자치구'].isin(selected_gus)) & 
                        (trans['기준_날짜'].str[:4].astype(int).between(years[0], years[1]))]
 if not trans_filtered.empty:
-    trans_pivot = trans_filtered.pivot(index='기준_날짜', columns='자치구', values='승객_수')
-    st.line_chart(trans_pivot)
+    trans_pivot = trans_filtered.pivot_table(index='기준_날짜', columns='자치구', values='승객_수', aggfunc='sum')    st.line_chart(trans_pivot)
 else:
     st.info("대중교통 데이터 없음")
 
