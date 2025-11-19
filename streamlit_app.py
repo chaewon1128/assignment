@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 import pydeck as pdk
 import os
 import itertools # for combining population data
-import altair as alt # for interactive charts
 
+st.title("[PR 관점에서 본 서울 미세먼지 농도의 영향 분석 대시보드]")
 # Streamlit 페이지 설정: 전체 레이아웃을 넓게 사용하도록 설정합니다.
 st.set_page_config(page_title="서울 대기질 & 라이프스타일 분석 대시보드", layout="wide")
-st.title("🏙️ [PR 관점에서 본 서울 미세먼지 농도의 영향 분석 대시보드]")
 
 # matplotlib에서 한글 폰트 설정을 위한 함수
 def set_matplotlib_korean_font():
@@ -20,7 +19,6 @@ def set_matplotlib_korean_font():
     plt.rcParams['font.family'] = 'Malgun Gothic' # Windows 기준
     plt.rcParams['axes.unicode_minus'] = False # 마이너스 폰트 깨짐 방지
     try:
-        # Altair/Streamlit 내장 차트 사용시 Matplotlib 폰트 설정은 보조적으로만 작용
         plt.rc('font', family='NanumGothic') # 시스템에 나눔고딕이 있을 경우 사용
     except:
         # 폰트가 없는 경우 기본 설정으로 진행 (경고 메시지 출력)
@@ -176,7 +174,7 @@ def load_data():
     # PM10과 배달 통합
     if not daily_pol.empty and not delivery.empty:
         # 서울 전체 일평균 PM10 계산 (자치구 '평균'을 사용할 경우 오류 발생 가능성으로 새로 계산)
-        seoul_daily_pol = daily_pol[daily_pol['자치구'] != '평균'].groupby('Date')['미세먼지(PM10)'].mean().reset_index()
+        seoul_daily_pol = daily_pol.groupby('Date')['미세먼지(PM10)'].mean().reset_index()
         combined_delivery = pd.merge(
             seoul_daily_pol, delivery,
             on='Date',
@@ -306,56 +304,37 @@ with tab1:
     if pol_filt.empty:
         st.warning("선택된 연도 및 자치구에 해당하는 미세먼지 데이터가 없습니다.")
     else:
-        # 1. 시계열 변화 추이 (Altair 차트 - 확대/축소 가능)
+        # 1. 시계열 변화 추이 (라인 그래프)
         st.subheader("일별 미세먼지 농도 추이 (선택 자치구)")
-        daily_pm10_trend = pol_filt.groupby(['Date','자치구'])['미세먼지(PM10)'].mean().reset_index()
+        daily_pm10_trend = pol_filt.groupby(['Date','자치구'])['미세먼지(PM10)'].mean().unstack()
+        # 그래프 영역을 Streamlit 내장 차트 기능으로 표시
+        st.line_chart(daily_pm10_trend, use_container_width=True)
+        st.caption("선택된 자치구별 일평균 PM10 농도 변화 추이")
 
-        # Altair 차트 설정
-        chart = alt.Chart(daily_pm10_trend).mark_line().encode(
-            x=alt.X('Date', title='날짜'),
-            y=alt.Y('미세먼지(PM10)', title='평균 PM10 (μg/m³)'),
-            color=alt.Color('자치구', title='자치구'),
-            tooltip=[alt.Tooltip('Date', format="%Y-%m-%d"), '자치구', alt.Tooltip('미세먼지(PM10)', format='.1f')]
-        ).properties(
-            title="선택된 자치구별 일평균 PM10 농도 변화 추이"
-        ).interactive() # 확대/축소 기능 추가
-
-        st.altair_chart(chart, use_container_width=True)
-        st.caption("차트 위에서 드래그하여 확대/축소하거나 세부 값을 확인해 보세요.")
-        
-        # 세부 데이터 확인
-        with st.expander("세부 데이터 확인 (일별 PM10 농도)"):
-            st.dataframe(daily_pm10_trend.sort_values('Date', ascending=False), use_container_width=True)
-
-        # 2. 지역별 PM10 농도 비교 (Altair 바 그래프 - 확대/축소 가능)
+        # 2. 지역별 PM10 농도 비교 (막대 그래프)
         st.subheader("지역별 평균 PM10 농도 비교")
-        avg_pm10 = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().reset_index().sort_values('미세먼지(PM10)', ascending=False)
-        avg_pm10['Status'] = avg_pm10['미세먼지(PM10)'].apply(lambda x: get_pm10_status(x)[0])
+        avg_pm10 = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().sort_values(ascending=False)
         
-        # PM10 상태별 색상 스케일
-        status_order = ['매우 나쁨(151+)', '나쁨(81~150)', '보통(31~80)', '좋음(0~30)', '미정']
-        range_colors = ['#FF7675', '#FFB347', '#85E085', '#AACCF7', '#808080'] # RGB를 16진수로 변환
-
-        chart_bar = alt.Chart(avg_pm10).mark_bar().encode(
-            x=alt.X('자치구', sort='-y', title='자치구'),
-            y=alt.Y('미세먼지(PM10)', title='평균 PM10 (μg/m³)'),
-            color=alt.Color('Status', title='PM10 상태', scale=alt.Scale(domain=status_order, range=range_colors)),
-            tooltip=['자치구', alt.Tooltip('미세먼지(PM10)', format='.1f'), 'Status']
-        ).properties(
-            title=f"선택 연도({', '.join(selected_years)}) 기준 자치구별 평균 PM10"
-        ).interactive()
-
-        st.altair_chart(chart_bar, use_container_width=True)
+        # Matplotlib을 사용하여 막대 그래프 생성
+        fig, ax = plt.subplots(figsize=(10, 5))
+        # RGB 색상을 0~1로 정규화하여 Matplotlib에 적용
+        colors = [get_pm10_status(v)[1] for v in avg_pm10.values]
+        ax.bar(avg_pm10.index, avg_pm10.values, color=[(c[0]/255, c[1]/255, c[2]/255) for c in colors])
+        ax.set_xlabel("자치구", fontsize=12)
+        ax.set_ylabel("평균 PM10 (μg/m³)", fontsize=12)
+        ax.set_title(f"선택 연도({', '.join(selected_years)}) 기준 자치구별 평균 PM10", fontsize=14)
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        st.pyplot(fig) # 그래프를 Streamlit에 출력
 
         # 3. 지도 시각화 (PM10 농도 상태에 따른 색상)
         st.subheader("지역별 PM10 농도 시각화 (지도)")
         
-        # 지도 데이터 준비: 자치구별 평균 PM10 및 위치 정보 병합 (avg_pm10 사용)
-        map_df = avg_pm10.copy()
+        # 지도 데이터 준비: 자치구별 평균 PM10 및 위치 정보 병합
+        map_df = avg_pm10.reset_index().rename(columns={'미세먼지(PM10)': 'Avg_PM10'})
         map_df['lat'] = map_df['자치구'].apply(lambda g: seoul_gu_latlon.get(g, (0,0))[0])
         map_df['lon'] = map_df['자치구'].apply(lambda g: seoul_gu_latlon.get(g, (0,0))[1])
-        # get_pm10_status에서 RGB 반환
-        map_df['pm_color'] = map_df['미세먼지(PM10)'].apply(lambda v: get_pm10_status(v)[1]) 
+        map_df['pm_color'] = map_df['Avg_PM10'].apply(lambda v: get_pm10_status(v)[1])
 
         layer = pdk.Layer(
             "ScatterplotLayer",
@@ -371,8 +350,7 @@ with tab1:
         st.pydeck_chart(pdk.Deck(
             layers=[layer],
             initial_view_state=initial_view_state,
-            # 툴팁 수정: {변수} 대신 {Avg_PM10}처럼 명확한 변수명으로 변경
-            tooltip={"text": "{자치구}\n평균 PM10: {미세먼지(PM10):.1f} µg/m³"} 
+            tooltip={"text": "{자치구}\n평균 PM10: {Avg_PM10:.1f} µg/m³"}
         ))
 
 
@@ -394,43 +372,24 @@ with tab2:
                 '승객_수': 'sum'
             }).reset_index()
 
-            # 상관계수 계산
-            if len(daily_comp_mobility) > 1:
-                corr = daily_comp_mobility['미세먼지(PM10)'].corr(daily_comp_mobility['승객_수'])
-                st.info(f"💡 **PM10 vs. 총 승객 수 상관계수 (R): {corr:.2f}**")
-            else:
-                st.info("💡 상관계수를 계산하기에 데이터 포인트가 부족합니다.")
-            
             if not daily_comp_mobility.empty:
-                # Altair 이중 축 차트
-                base = alt.Chart(daily_comp_mobility.melt('Date')).encode(x='Date')
+                fig, ax1 = plt.subplots(figsize=(10, 5))
+                ax2 = ax1.twinx()
 
-                # PM10 (좌측 축)
-                line_pm10 = base.transform_filter(
-                    alt.datum.variable == '미세먼지(PM10)'
-                ).mark_line(color='blue').encode(
-                    y=alt.Y('value', axis=alt.Axis(title='PM10 (μg/m³)', titleColor='blue')),
-                    tooltip=[alt.Tooltip('Date', format="%Y-%m-%d"), alt.Tooltip('value', format='.1f', title='PM10')]
-                )
+                # PM10 (좌측 y축)
+                ax1.plot(daily_comp_mobility['Date'], daily_comp_mobility['미세먼지(PM10)'], color='blue', label='PM10 농도')
+                ax1.set_xlabel("날짜")
+                ax1.set_ylabel("PM10 (μg/m³)", color='blue')
+                ax1.tick_params(axis='y', labelcolor='blue')
 
-                # Transit (우측 축)
-                line_transit = base.transform_filter(
-                    alt.datum.variable == '승객_수'
-                ).mark_line(color='green').encode(
-                    y=alt.Y('value', axis=alt.Axis(title='총 승객 수', titleColor='green')),
-                    tooltip=[alt.Tooltip('Date', format="%Y-%m-%d"), alt.Tooltip('value', format=',.0f', title='총 승객 수')]
-                )
-
-                chart_combined = alt.layer(line_pm10, line_transit).resolve_scale(
-                    y='independent'
-                ).properties(
-                    title="PM10 농도와 대중교통 이용량 일별 변화 추이"
-                ).interactive() # 확대/축소 기능 추가
-
-                st.altair_chart(chart_combined, use_container_width=True)
+                # Transit (우측 y축)
+                ax2.plot(daily_comp_mobility['Date'], daily_comp_mobility['승객_수'], color='green', label='총 승객 수')
+                ax2.set_ylabel("총 승객 수", color='green')
+                ax2.tick_params(axis='y', labelcolor='green')
                 
-                with st.expander("세부 데이터 확인 (PM10/승객 수)"):
-                    st.dataframe(daily_comp_mobility.sort_values('Date', ascending=False), use_container_width=True)
+                ax1.set_title("PM10 농도와 대중교통 이용량 일별 변화 추이")
+                fig.tight_layout()
+                st.pyplot(fig)
             else:
                 st.warning("선택된 조건에 해당하는 데이터가 부족합니다.")
 
@@ -447,28 +406,22 @@ with tab2:
                 avg_transit_by_pm10['Status'] = pd.Categorical(avg_transit_by_pm10['Status'], categories=status_order, ordered=True)
                 avg_transit_by_pm10 = avg_transit_by_pm10.sort_values('Status').dropna(subset=['Status'])
 
-                # PM10 상태별 색상 매핑을 위한 16진수 색상 준비
-                def get_hex_color(status):
+                fig, ax = plt.subplots(figsize=(10, 5))
+                # PM10 상태별 색상 매핑
+                bar_colors = []
+                for status in avg_transit_by_pm10['Status']:
+                    # 상태명에서 괄호 앞 부분만 추출 ('좋음' 등)
                     simple_status = status.split('(')[0]
-                    rgb = pm_colors.get(simple_status, [128, 128, 128])
-                    return f'#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}'
-
-                avg_transit_by_pm10['ColorHex'] = avg_transit_by_pm10['Status'].apply(get_hex_color)
-
-                # Altair 바 차트
-                chart_bar_status = alt.Chart(avg_transit_by_pm10).mark_bar().encode(
-                    x=alt.X('Status', sort=status_order, title='PM10 농도 상태'),
-                    y=alt.Y('승객_수', title='일평균 승객 수'),
-                    color=alt.Color('ColorHex', scale=None, title='PM10 상태 색상'),
-                    tooltip=['Status', alt.Tooltip('승객_수', format=',.0f', title='평균 승객 수')]
-                ).properties(
-                    title="PM10 상태별 대중교통 일평균 이용 건수"
-                ).interactive()
-
-                st.altair_chart(chart_bar_status, use_container_width=True)
+                    color = pm_colors.get(simple_status, [128, 128, 128]) # 기본 색상: 회색
+                    bar_colors.append((color[0]/255, color[1]/255, color[2]/255))
                 
-                with st.expander("세부 데이터 확인 (PM10 상태별 승객 수)"):
-                    st.dataframe(avg_transit_by_pm10[['Status', '승객_수']].sort_values('Status'), use_container_width=True)
+                ax.bar(avg_transit_by_pm10['Status'], avg_transit_by_pm10['승객_수'], color=bar_colors)
+                ax.set_xlabel("PM10 농도 상태", fontsize=12)
+                ax.set_ylabel("평균 승객 수", fontsize=12)
+                ax.set_title("PM10 상태별 대중교통 일평균 이용 건수")
+                plt.xticks(rotation=0)
+                plt.tight_layout()
+                st.pyplot(fig)
             else:
                 st.warning("PM10 상태별 평균 대중교통 이용량 데이터를 생성할 수 없습니다.")
 
@@ -493,51 +446,26 @@ with tab3:
     
     # 1. 시계열 비교 (PM10 vs Delivery)
     st.subheader(f"연도별 PM10 농도와 배달 건수 지수 변화 ({year_select_tab3}년)")
-    delivery_comp_filt = combined_delivery[combined_delivery['Year'] == year_select_tab3].set_index('Date').reset_index()
+    delivery_comp_filt = combined_delivery[combined_delivery['Year'] == year_select_tab3].set_index('Date')
     
     if not delivery_comp_filt.empty:
-        col_t3_1, col_t3_2 = st.columns([1, 4])
+        fig, ax1 = plt.subplots(figsize=(10, 5))
+        ax2 = ax1.twinx()
+
+        # PM10 (좌측 y축)
+        ax1.plot(delivery_comp_filt.index, delivery_comp_filt['미세먼지(PM10)'], color='orange', label='PM10 농도')
+        ax1.set_ylabel("PM10 (μg/m³)", color='orange')
+        ax1.tick_params(axis='y', labelcolor='orange')
+
+        # Delivery (우측 y축)
+        ax2.plot(delivery_comp_filt.index, delivery_comp_filt['배달_건수_지수'], color='red', label='배달 건수 지수')
+        ax2.set_ylabel("배달 건수 지수", color='red')
+        ax2.tick_params(axis='y', labelcolor='red')
         
-        # 상관계수 계산
-        with col_t3_1:
-            if len(delivery_comp_filt) > 1:
-                corr_del = delivery_comp_filt['미세먼지(PM10)'].corr(delivery_comp_filt['배달_건수_지수'])
-                st.info(f"💡 **PM10 vs. 배달 지수 상관계수 (R): {corr_del:.2f}**")
-            else:
-                st.info("💡 상관계수를 계산하기에 데이터 포인트가 부족합니다.")
-        
-        with col_t3_2:
-            # Altair 이중 축 차트
-            base_del = alt.Chart(delivery_comp_filt.melt('Date')).encode(x='Date')
-
-            # PM10 (좌측 축)
-            line_pm10_del = base_del.transform_filter(
-                alt.datum.variable == '미세먼지(PM10)'
-            ).mark_line(color='orange').encode(
-                y=alt.Y('value', axis=alt.Axis(title='PM10 (μg/m³)', titleColor='orange')),
-                tooltip=[alt.Tooltip('Date', format="%Y-%m-%d"), alt.Tooltip('value', format='.1f', title='PM10')]
-            )
-
-            # Delivery (우측 축)
-            line_delivery = base_del.transform_filter(
-                alt.datum.variable == '배달_건수_지수'
-            ).mark_line(color='red').encode(
-                y=alt.Y('value', axis=alt.Axis(title='배달 건수 지수', titleColor='red')),
-                tooltip=[alt.Tooltip('Date', format="%Y-%m-%d"), alt.Tooltip('value', format='.1f', title='배달 건수 지수')]
-            )
-
-            chart_combined_del = alt.layer(line_pm10_del, line_delivery).resolve_scale(
-                y='independent'
-            ).properties(
-                title=f"{year_select_tab3}년 PM10 농도와 배달 건수 지수 변화 추이"
-            ).interactive() # 확대/축소 기능 추가
-
-            st.altair_chart(chart_combined_del, use_container_width=True)
-            st.caption("PM10 농도가 높을수록(혹은 높았던 이후) 배달 건수 지수가 증가하는 경향성이 나타날 수 있습니다.")
-        
-        with st.expander("세부 데이터 확인 (PM10/배달 지수)"):
-            st.dataframe(delivery_comp_filt.sort_values('Date', ascending=False), use_container_width=True)
-            
+        ax1.set_title(f"{year_select_tab3}년 PM10 농도와 배달 건수 지수 변화 추이")
+        fig.tight_layout()
+        st.pyplot(fig)
+        st.caption("PM10 농도가 높을수록(혹은 높았던 이후) 배달 건수 지수가 증가하는 경향성이 나타날 수 있습니다.")
     else:
         st.warning(f"선택된 연도({year_select_tab3}년)에 해당하는 PM10-배달 통합 데이터가 부족하거나, delivery.csv 로드에 문제가 있었습니다.")
 
@@ -575,8 +503,7 @@ with tab3:
         st.pydeck_chart(pdk.Deck(
             layers=[layer3], 
             initial_view_state=initial_view_state,
-            # 툴팁 수정: 값으로 표시
-            tooltip={"text": "{자치구}\nPM10: {PM10:.1f} µg/m³\n평균 지출액: {Avg_Spending:,.0f}₩"}
+            tooltip={"text": f"{자치구}\nPM10: {PM10:.1f}\n평균 지출액: {Avg_Spending:.0f}₩"}
         ))
         st.caption("원의 크기는 평균 지출액(배달 수요 대리 지표), 색상은 PM10 농도 상태를 나타냅니다.")
     else:
@@ -610,9 +537,7 @@ with tab4:
         
     if not trans_filt.empty:
         # trans_filt에서 승객_수 합산
-        # 날짜와 자치구로 그룹화된 일별 승객 수의 평균을 구한 뒤, 자치구별로 다시 합산합니다.
-        # 이 방식으로 수정하여 '자치구' 기준으로 데이터 포인트를 맞춥니다.
-        transit_avg_gu = trans_filt.groupby(['Date', '자치구'])['승객_수'].sum().reset_index().groupby('자치구')['승객_수'].mean()
+        transit_avg_gu = trans_filt.groupby('자치구')['승객_수'].sum() 
     else:
         transit_avg_gu = pd.Series()
         
@@ -641,10 +566,6 @@ with tab4:
         ax.set_yticklabels(corr_mat.columns, rotation=0)
         plt.tight_layout()
         st.pyplot(fig)
-        
-        with st.expander("상관관계 분석에 사용된 데이터 (자치구별 평균)"):
-            st.dataframe(corr_df_gu.sort_values('PM10', ascending=False), use_container_width=True)
-            
     elif not corr_df_gu.empty and len(corr_df_gu) < 2:
            st.warning("상관관계를 분석하기에 선택된 자치구 수가 충분하지 않습니다 (최소 2개 이상 필요).")
     else:
@@ -667,31 +588,36 @@ with tab4:
         pm10_long_term_avg = pol_filt.groupby('자치구')['미세먼지(PM10)'].mean().rename("평균_PM10")
         
         # 데이터 통합
-        ppl_pm10_comp = pd.concat([ppl_change, pm10_long_term_avg], axis=1).dropna().reset_index()
+        ppl_pm10_comp = pd.concat([ppl_change, pm10_long_term_avg], axis=1).dropna()
         
         if not ppl_pm10_comp.empty and len(ppl_pm10_comp) >= 2:
-            # Altair 산점도 (확대/축소 기능 포함)
-            chart_scatter = alt.Chart(ppl_pm10_comp).mark_circle(size=100).encode(
-                x=alt.X('평균_PM10', title=f"평균 PM10 농도 (선택 연도 기준)"), 
-                y=alt.Y('인구_이동_변화량', title="인구 이동 건수 변화량 (2014 - 2012)"), 
-                tooltip=['자치구', alt.Tooltip('평균_PM10', format='.1f'), alt.Tooltip('인구_이동_변화량', format=',.0f')],
-                color=alt.value('purple')
-            ).properties(
-                title="PM10 농도와 인구 이동 건수 변화량 관계 (2014년 - 2012년 기준)"
-            ).interactive()
-
-            # 평균선 (PM10)
-            avg_pm10_line = alt.Chart(ppl_pm10_comp).mark_rule(color='red', strokeDash=[3, 3]).encode(
-                x='mean(평균_PM10)'
-            ).interactive()
+            fig, ax = plt.subplots(figsize=(10, 6))
             
-            # 0 기준선 (인구 변화량)
-            zero_line = alt.Chart(pd.DataFrame({'y': [0]})).mark_rule(color='black', strokeWidth=1).encode(
-                y='y'
+            # 산점도 생성
+            sns.scatterplot(
+                data=ppl_pm10_comp, 
+                x='평균_PM10', 
+                y='인구_이동_변화량', 
+                ax=ax, 
+                s=100, # 마커 크기
+                color='purple'
             )
-
-            st.altair_chart(chart_scatter + avg_pm10_line + zero_line, use_container_width=True)
-
+            
+            # 자치구 라벨 추가 (시각적 판단을 돕기 위해)
+            for gu, row in ppl_pm10_comp.iterrows():
+                ax.text(row['평균_PM10'] * 1.01, row['인구_이동_변화량'], gu, fontsize=9)
+            
+            # 평균선 추가
+            ax.axvline(ppl_pm10_comp['평균_PM10'].mean(), color='r', linestyle='--', linewidth=1, label='평균 PM10')
+            ax.axhline(0, color='k', linestyle='-', linewidth=1, label='인구 변화량 0')
+            
+            ax.set_title("PM10 농도와 인구 이동 건수 변화량 관계 (2014년 - 2012년 기준)", fontsize=14)
+            ax.set_xlabel(f"평균 PM10 농도 (선택 연도 기준)", fontsize=12)
+            ax.set_ylabel("인구 이동 건수 변화량 (2014 - 2012)", fontsize=12)
+            ax.legend(loc='lower left')
+            plt.tight_layout()
+            st.pyplot(fig)
+            
             # 분석 인사이트
             st.markdown(
                 """
@@ -699,9 +625,6 @@ with tab4:
                 - **입지 전략 재검토:** 만약 PM10이 높고 인구 변화량이 낮은(음수인) 사분면에 위치한 자치구가 있다면, 해당 지역은 장기적으로 거주 매력이 감소하고 있음을 시사합니다. 기업은 이 지역에 **새로운 인프라 투자를 신중하게 고려**하거나, 혹은 **공기질 개선 등 환경 요소를 고려한 차별화된 투자**를 진행해야 합니다.
                 """
             )
-            
-            with st.expander("세부 데이터 확인 (인구 이동 변화 및 PM10)"):
-                st.dataframe(ppl_pm10_comp.sort_values('인구_이동_변화량', ascending=False), use_container_width=True)
         else:
             st.warning("인구 이동 변화 분석을 위한 데이터가 부족합니다 (자치구별 2012년/2014년 데이터 모두 필요).")
     else:
