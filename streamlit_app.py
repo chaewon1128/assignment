@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PM10 and Public Transit Data Analysis</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js and Adapter -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
-    <!-- Chart.js Adapter Luxon for time series (optional but good practice for time data) -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- PapaParse for CSV loading -->
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/min/papaparse.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -215,8 +217,9 @@
                     const avg_pm10 = pm10Aggregated[district].sum_pm10 / pm10Aggregated[district].count;
                     combinedData.push({
                         district: district,
-                        avg_pm10: avg_pm10,
-                        passenger_count: d['개수'] // Proxy for passenger count / population
+                        // Ensure numerical values are correctly parsed
+                        avg_pm10: parseFloat(avg_pm10), 
+                        passenger_count: parseFloat(d['개수']) // Proxy for passenger count / population
                     });
                 }
             });
@@ -238,7 +241,8 @@
             // 1. Aggregate daily PM10 average (from combined_pol.csv)
             const dailyPM10 = dataPM10.reduce((acc, curr) => {
                 const date = curr['일시'];
-                const pm10 = curr['미세먼지(PM10)'];
+                // Ensure data type is number (PapaParse should handle this but adding a safeguard)
+                const pm10 = parseFloat(curr['미세먼지(PM10)']); 
 
                 // Only use '평균' (average) row for daily time series
                 if (curr['자치구'] !== '평균' || !date || typeof pm10 !== 'number' || isNaN(pm10)) return acc;
@@ -250,7 +254,8 @@
             // 2. Aggregate daily Transit average (from trans.csv) - Sum of passengers per day
             const dailyTransit = dataTransit.reduce((acc, curr) => {
                 const date = curr['기준_날짜'];
-                const passengers = curr['승객_수'];
+                // Ensure data type is number
+                const passengers = parseFloat(curr['승객_수']);
 
                 if (date && typeof passengers === 'number' && !isNaN(passengers)) {
                     if (!acc[date]) {
@@ -302,7 +307,8 @@
             // 1. Calculate daily PM10 average and status (from '평균' row)
             const dailyPM10Map = dataPM10.reduce((acc, curr) => {
                 const date = curr['일시'];
-                const pm10 = curr['미세먼지(PM10)'];
+                // Ensure data type is number
+                const pm10 = parseFloat(curr['미세먼지(PM10)']);
                 
                 // Only consider the overall average row ('자치구' is '평균')
                 if (curr['자치구'] === '평균' && date && typeof pm10 === 'number' && !isNaN(pm10)) {
@@ -314,7 +320,8 @@
             // 2. Aggregate daily Transit usage (from trans.csv)
             const dailyTransitTotal = dataTransit.reduce((acc, curr) => {
                 const date = curr['기준_날짜'];
-                const passengers = curr['승객_수'];
+                // Ensure data type is number
+                const passengers = parseFloat(curr['승객_수']);
 
                 if (date && typeof passengers === 'number' && !isNaN(passengers)) {
                     if (!acc[date]) {
