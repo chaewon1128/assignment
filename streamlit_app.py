@@ -84,7 +84,8 @@ st.subheader("🚇 대중교통 승객 수 변화")
 trans_filtered = trans[(trans['자치구'].isin(selected_gus)) & 
                        (trans['기준_날짜'].str[:4].astype(int).between(years[0], years[1]))]
 if not trans_filtered.empty:
-    trans_pivot = trans_filtered.pivot_table(index='기준_날짜', columns='자치구', values='승객_수', aggfunc='sum')    st.line_chart(trans_pivot)
+    trans_pivot = trans_filtered.pivot_table(index='기준_날짜', columns='자치구', values='승객_수', aggfunc='sum')
+    st.line_chart(trans_pivot)
 else:
     st.info("대중교통 데이터 없음")
 
