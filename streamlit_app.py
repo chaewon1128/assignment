@@ -1,145 +1,121 @@
-# streamlit_app.py
-
 import os
 import streamlit as st
 import pandas as pd
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-import plotly.express as px
-import pydeck as pdk
 
-# === Streamlit 페이지 설정 ===
-st.set_page_config(page_title="서울 대기오염 & 생활행동 대시보드", layout="wide")
-st.title("🌏 서울 대기오염 & 생활행동 대시보드")
-st.markdown(
-    """
-    - 자치구, 연도 선택 후 미세먼지, 유동인구, 교통, 소비, 배달 시각화  
-    - 홍보 및 정책 관점 인사이트 추출에 최적화  
-    """
-)
+st.set_page_config(page_title="서울 미세먼지 생활지표 인사이트", layout="wide")
 
-# === 데이터 로딩 함수 ===
-@st.cache_data
-def load_data():
-    pol = pd.read_csv("combined_pol.csv")
-    ppl_2012 = pd.read_csv("ppl_2012.csv")
-    ppl_2014 = pd.read_csv("ppl_2014.csv")
-    trans = pd.read_csv("trans.csv")
-    spent = pd.read_csv("spent.csv")
-    deliver = pd.read_csv("delivery.csv")
-    return pol, ppl_2012, ppl_2014, trans, spent, deliver
+files_needed = ["spent.csv", "ppl_2012.csv", "ppl_2014.csv", "delivery.csv", "combined_pol.csv", "trans.csv"]
+for f in files_needed:
+    if not os.path.exists(f):
+        st.error(f"❌ 파일이 경로에 없습니다: {f}")
 
-pol, ppl_2012, ppl_2014, trans, spent, deliver = load_data()
+# ---------------- 데이터 로딩 ----------------
+spent = pd.read_csv("spent.csv")
+ppl_2012 = pd.read_csv("ppl_2012.csv")
+ppl_2014 = pd.read_csv("ppl_2014.csv")
+delivery = pd.read_csv("delivery.csv")
+pol = pd.read_csv("combined_pol.csv")
+trans = pd.read_csv("trans.csv")
 
-# === 사이드바 필터 ===
-with st.sidebar:
-    st.header("🔎 분석 필터")
-    gu_list = sorted(pol["자치구"].unique())
-    selected_gus = st.multiselect("자치구 선택", gu_list, default=gu_list[:5])
-    years = st.slider("연도 범위 선택", min_value=2012, max_value=2024, value=(2019, 2023))
-    st.markdown("---")
-    st.info("마지막 탭에서 데이터 파일 다운로드 가능합니다.")
+# ---------------- 연도/자치구 선택 ----------------
+YEARS = ['2019', '2020', '2021', '2022']
+GUS = sorted(list(set(pol[pol['자치구'] != '평균']['자치구'])))
 
-# === 미세먼지 데이터 필터링 ===
-pol_filtered = pol[
-    (pol["자치구"].isin(selected_gus)) &
-    (pol["일시"].str.slice(0,4).astype(int).between(years[0], years[1]))
-]
+# ---- 미세먼지: 자치구-연평균 ----
+pol['연'] = pol['일시'].astype(str).str[:4]
+pol_y = pol[(pol['연'].isin(YEARS)) & (pol['자치구'] != '평균')]
+pm_year_gu = pol_y.groupby(['연', '자치구'])['미세먼지(PM10)'].mean().unstack()
 
-# --- 미세먼지 라인차트 ---
-st.subheader("📈 미세먼지 (PM10) 연도·자치구별 추이")
-if not pol_filtered.empty:
-    pm10_pivot = pol_filtered.pivot_table(index='일시', columns='자치구', values='미세먼지(PM10)')
-    st.line_chart(pm10_pivot)
-else:
-    st.warning("선택 조건에 맞는 미세먼지 데이터가 없습니다.")
+st.title("서울 미세먼지 및 생활지표 인사이트 대시보드")
+st.markdown("#### 자치구별 미세먼지 (연도별 패턴)")
 
-# --- 미세먼지 박스플롯 ---
-st.subheader("☁️ 미세먼지 분포 (자치구별 Boxplot)")
-select_box_gus = pol[pol["자치구"].isin(selected_gus)]
-fig, ax = plt.subplots(figsize=(12, 5))
-sns.boxplot(data=select_box_gus, x="자치구", y="미세먼지(PM10)", ax=ax)
-plt.xticks(rotation=45)
+fig, ax = plt.subplots(figsize=(12,5))
+sns.heatmap(pm_year_gu, cmap="YlOrRd", annot=True, fmt=".0f", ax=ax)
+plt.xlabel("자치구")
+plt.ylabel("연도")
+plt.title("연도별 자치구별 연평균 미세먼지(PM10)")
 st.pyplot(fig, use_container_width=True)
 
-# === 유동인구 시각화 ===
-st.subheader("🚶 유동인구 비교 (2012년 vs 2014년)")
+# ---- 지출: 자치구-연평균 ----
+spent['연'] = spent['기준_년분기_코드'].astype(str).str[:4]
+spent_y = spent[(spent['연'].isin(YEARS))]
+spent_gu = spent_y.groupby(['연', '자치구'])['지출_총금액'].sum().unstack()
 
-col1, col2 = st.columns(2)
-with col1:
-    st.markdown("### 2012년 유동인구")
-    ppl_2012_filtered = ppl_2012[ppl_2012['거주지'].isin(selected_gus)]
-    ppl_2012_plot = ppl_2012_filtered.set_index('거주지')['개수'].reindex(selected_gus).fillna(0)
-    st.bar_chart(ppl_2012_plot)
+st.markdown("#### 자치구별 연도별 연간 총지출")
+fig2, ax2 = plt.subplots(figsize=(12,5))
+sns.heatmap(spent_gu.apply(np.log1p), cmap="BuGn", annot=False, ax=ax2)
+plt.xlabel("자치구")
+plt.ylabel("연도")
+plt.title("연도별 자치구별 총지출 (log scale)")
+st.pyplot(fig2, use_container_width=True)
 
-with col2:
-    st.markdown("### 2014년 유동인구")
-    ppl_2014_filtered = ppl_2014[ppl_2014['거주지'].isin(selected_gus)]
-    ppl_2014_plot = ppl_2014_filtered.set_index('거주지')['개수'].reindex(selected_gus).fillna(0)
-    st.bar_chart(ppl_2014_plot)
+# ---- 유동인구: ppl_2012 vs ppl_2014 ----
+st.markdown("#### 자치구별 유동인구 변화 (2012→2014)")
+ppl2012 = ppl_2012.set_index("거주지").reindex(GUS)["개수"].fillna(0)
+ppl2014 = ppl_2014.set_index("거주지").reindex(GUS)["개수"].fillna(0)
+move_df = pd.DataFrame({"2012": ppl2012, "2014": ppl2014})
+move_df["증감(2014-2012)"] = move_df["2014"] - move_df["2012"]
+st.bar_chart(move_df[["2012", "2014"]])
 
-# === 대중교통 승객 수 추이 ===
-st.subheader("🚇 대중교통 승객 수 변화")
-trans_filtered = trans[(trans['자치구'].isin(selected_gus)) & 
-                       (trans['기준_날짜'].str[:4].astype(int).between(years[0], years[1]))]
-if not trans_filtered.empty:
-    trans_pivot = trans_filtered.pivot_table(index='기준_날짜', columns='자치구', values='승객_수', aggfunc='sum')
-    st.line_chart(trans_pivot)
+# ---- 대중교통: 최근 연도별 자치구별 일평균 ----
+trans['연'] = trans['기준_날짜'].astype(str).str[:4]
+trans_sub = trans[trans['연'].isin(['2021','2022'])]
+trans_gu = trans_sub.groupby(['연', '자치구'])['승객_수'].sum().unstack(fill_value=0)
+
+st.markdown("#### 대중교통 연도별 자치구별 이용(합계)")
+fig3, ax3 = plt.subplots(figsize=(12,5))
+sns.heatmap(trans_gu.apply(np.log1p), cmap="Blues", annot=False, ax=ax3)
+plt.xlabel("자치구")
+plt.ylabel("연도")
+plt.title("연도별 자치구별 대중교통 승객수 (log scale)")
+st.pyplot(fig3, use_container_width=True)
+
+# ---- 배달 매출: 시계열 -->
+st.markdown("#### 서울 배달 매출 전체 변화 (2020 이후)")
+if 'Date' in delivery.columns:
+    delivery['Date'] = pd.to_datetime(delivery['Date'])
+    delivery = delivery.sort_values('Date')
+    st.line_chart(delivery.set_index('Date')['전체'])
 else:
-    st.info("대중교통 데이터 없음")
+    st.line_chart(delivery.iloc[:,1])
 
-# === 상권 지출 현황 시각화 ===
-st.subheader("💰 상권별 분기 지출 현황")
-spent_filtered = spent[(spent['자치구'].isin(selected_gus)) & (spent['기준_년분기_코드'] < 20241)]
-spent_filtered['년월'] = spent_filtered['기준_년분기_코드'].astype(str).apply(lambda x: x[:-1]+'0'+x[-1] if len(x)==5 else x)
-pivot_spent = spent_filtered.pivot_table(
-    index='년월', columns='자치구', values='지출_총금액', aggfunc='sum'
-)
-st.line_chart(pivot_spent)
+# ---- 연평균 미세먼지-지출-승객수-유동인구 상관 Heatmap ----
+st.markdown("#### 🚩 지표 상관관계(구별, 연도별 평균값)")
+# 맞춰진 구와 연도별 summary row 만들기
+corr_df = pd.DataFrame(index=YEARS, columns=pd.MultiIndex.from_product([GUS, ['pm','spent','trans','ppl2012','ppl2014']]))
 
-# === 배달 외식 매출 추이 ===
-st.subheader("🍲 배달 외식 매출 변화 (2020~2025년)")
-deliver.set_index('Date', inplace=True)
-st.line_chart(deliver['전체'])
+for y in YEARS:
+    for gu in GUS:
+        pm = pm_year_gu.loc[y,gu] if (y in pm_year_gu.index) and (gu in pm_year_gu.columns) else np.nan
+        sp = spent_gu.loc[y,gu] if (y in spent_gu.index) and (gu in spent_gu.columns) else np.nan
+        tr = trans_gu.loc[y,gu] if (y in trans_gu.index) and (gu in trans_gu.columns) else np.nan
+        p2012 = move_df.loc[gu,"2012"] if gu in move_df.index else np.nan
+        p2014 = move_df.loc[gu,"2014"] if gu in move_df.index else np.nan
+        corr_df.loc[y,(gu,'pm')] = pm
+        corr_df.loc[y,(gu,'spent')] = sp
+        corr_df.loc[y,(gu,'trans')] = tr
+        corr_df.loc[y,(gu,'ppl2012')] = p2012
+        corr_df.loc[y,(gu,'ppl2014')] = p2014
 
-# === 지도에 미세먼지 평균 농도 표시 ===
-st.subheader("🗺️ 자치구별 미세먼지 연평균 (선택 연도 내)")
+# 전체적으로 평균치(년도X자치구)별 상관관계
+flat_corr = corr_df.stack().dropna().astype(float).reset_index().pivot_table(index='level_1',values=[0,1,2,3,4],aggfunc='mean')
+flat_corr.columns=['pm','spent','trans','ppl2012','ppl2014']
+corr_mat = flat_corr.corr()
 
-seoul_gu_latlon = {
-    '강남구': (37.5172,127.0473), '강동구': (37.5301,127.1237), '강북구': (37.6396,127.0256),
-    '강서구': (37.5509,126.8495), '관악구': (37.4781,126.9516), '광진구': (37.5386,127.0823),
-    '구로구': (37.4954,126.8581), '금천구': (37.4600,126.9002), '노원구': (37.6544,127.0568),
-    '도봉구': (37.6688,127.0477), '동대문구': (37.5744,127.0396), '동작구': (37.5124,126.9396),
-    '마포구': (37.5634,126.9087), '서대문구': (37.5792,126.9368), '서초구': (37.4837,127.0324),
-    '성동구': (37.5633,127.0363), '성북구': (37.6061,127.0220), '송파구': (37.5145,127.1067),
-    '양천구': (37.5169,126.8666), '영등포구': (37.5264,126.8963), '용산구': (37.5326,126.9907),
-    '은평구': (37.6176,126.9227), '종로구': (37.5735,126.9797), '중구': (37.5636,126.9976), '중랑구': (37.6063,127.0926)
-}
+fig4, ax4 = plt.subplots(figsize=(6,5))
+sns.heatmap(corr_mat, annot=True, fmt=".2f", cmap='vlag', ax=ax4)
+plt.title("미세먼지-지출-교통-유동인구 상관 Heatmap")
+plt.tight_layout()
+st.pyplot(fig4)
 
-map_data = pol_filtered.groupby('자치구')['미세먼지(PM10)'].mean().reset_index()
-map_data['lat'] = map_data['자치구'].map(lambda x: seoul_gu_latlon.get(x, (0,0))[0])
-map_data['lon'] = map_data['자치구'].map(lambda x: seoul_gu_latlon.get(x, (0,0))[1])
-
-layer = pdk.Layer(
-    'ScatterplotLayer',
-    data=map_data,
-    get_position='[lon, lat]',
-    get_fill_color='[255, 140, 0, 160]',
-    get_radius=2000,
-    pickable=True,
-)
-
-view_state = pdk.ViewState(latitude=37.5665, longitude=126.9780, zoom=10)
-
-st.pydeck_chart(pdk.Deck(layers=[layer], initial_view_state=view_state,
-                        tooltip={"text": "{자치구}\n평균 미세먼지: {미세먼지(PM10)}"}))
-
-# === 데이터 다운로드 ===
-st.subheader("📥 분석에 사용된 데이터 다운로드")
-for file_name in files_needed:
-    with open(file_name, 'rb') as f:
-        st.download_button(label=f'Download {file_name}', data=f, file_name=file_name)
-
+# ---- 데이터 다운로드 ----
 st.markdown("---")
-st.caption("Developed by your PR/Data Analysis Toolkit")
+st.header("📦 CSV 데이터 다운로드")
+for fname in files_needed:
+    with open(fname, "rb") as f:
+        st.download_button(label=f'{fname} 다운로드', data=f, file_name=fname)
+
+st.caption("2025 서울 미세먼지(생활지표) 데이터 대시보드 by AI")
