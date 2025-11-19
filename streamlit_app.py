@@ -6,6 +6,9 @@ import matplotlib.pyplot as plt
 import pydeck as pdk
 import os
 import itertools # for combining population data
+!apt-get -qq -y install fonts-nanum
+import matplotlib.font_manager as fm
+plt.rc('font', family='NanumGothic')
 
 st.title("[PR 관점에서 본 서울 미세먼지 농도의 영향 분석 대시보드]")
 # Streamlit 페이지 설정: 전체 레이아웃을 넓게 사용하도록 설정합니다.
