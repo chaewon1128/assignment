@@ -356,10 +356,80 @@ with tab1:
 
 with tab2:
     st.header("2. 미세먼지 농도와 이동 패턴의 관계 분석 (PR 전략)")
-    st.markdown("미세먼지 농도 변화에 따른 시민의 대중교통 이용 건수를 비교하여, **고농도 시기 리스크 알림 및 홍보 전략 최적화** 방안을 모색합니다.")
+    st.markdown("미세먼지 농도 변화에 따른 시민의 대중교통 이용 건수를 비교하여, **홍보 전략 최적화** 방안을 모색합니다.")
 
-    col1, col2 = st.columns(2)
+try:
+    pol_df = pd.read_csv("combined_pol.csv")
+    trans_df = pd.read_csv("trans.csv")
+except FileNotFoundError:
+    print("오류: 필요한 파일(combined_pol.csv 또는 trans.csv)을 찾을 수 없습니다.")
+    exit()
 
+# 2. 미세먼지 데이터 전처리 (일별 서울시 평균 PM10 농도 추출)
+pol_df.rename(columns={'일시': '날짜', '미세먼지(PM10)': 'PM10_농도'}, inplace=True)
+pol_df['날짜'] = pd.to_datetime(pol_df['날짜'])
+
+# '자치구'가 '평균'인 값(서울시 일별 평균 PM10)을 대표값으로 사용
+seoul_daily_pm10 = pol_df[pol_df['자치구'] == '평균'][['날짜', 'PM10_농도']].copy()
+
+# 3. 대중교통 데이터 전처리 (일별 서울시 총 승객 수 합산)
+trans_df.rename(columns={'기준_날짜': '날짜', '승객_수': '총_승객_수'}, inplace=True)
+trans_df['날짜'] = pd.to_datetime(trans_df['날짜'])
+
+# 날짜별로 모든 자치구의 승객 수를 합산하여 일별 총 승객 수 계산
+daily_trans = trans_df.groupby('날짜')['총_승객_수'].sum().reset_index()
+
+# 4. 데이터 병합 (날짜 기준)
+# 공통된 날짜만을 기준으로 데이터를 병합합니다.
+merged_df = pd.merge(daily_trans, seoul_daily_pm10, on='날짜', how='inner')
+
+# NaN 값이 있는 행 제거
+merged_df.dropna(inplace=True)
+
+# 5. 상관관계 분석 (피어슨 상관계수)
+# PM10 농도와 총 승객 수 간의 피어슨 상관계수를 계산합니다.
+if not merged_df.empty:
+    correlation = merged_df['PM10_농도'].corr(merged_df['총_승객_수'])
+else:
+    correlation = np.nan
+
+# 6. 결과 출력 및 해석
+print("\n--- 분석 결과 ---")
+
+if not np.isnan(correlation):
+    print(f"PM10 농도와 대중교통 이용 건수 간의 피어슨 상관계수: {correlation:.4f}")
+
+    if correlation < -0.6:
+        relationship = "강한 음의 상관관계"
+        direction = "미세먼지 농도가 증가할수록 대중교통 이용 건수는 강하게 감소합니다."
+    elif correlation < -0.2:
+        relationship = "음의 상관관계"
+        direction = "미세먼지 농도가 증가할수록 대중교통 이용 건수는 감소하는 경향이 있습니다."
+    elif correlation > 0.6:
+        relationship = "강한 양의 상관관계"
+        direction = "미세먼지 농도가 증가할수록 대중교통 이용 건수도 강하게 증가합니다."
+    elif correlation > 0.2:
+        relationship = "양의 상관관계"
+        direction = "미세먼지 농도가 증가할수록 대중교통 이용 건수도 증가하는 경향이 있습니다."
+    else:
+        relationship = "매우 약한 상관관계 또는 무상관"
+        direction = "두 변수 간에 뚜렷한 선형 관계를 찾기 어렵습니다."
+
+    print(f"해석: {relationship}가 나타났으며, 이는 '{direction}'는 경향을 보입니다.")
+else:
+    print("오류: 데이터 병합 후 유효한 데이터가 부족하여 상관관계를 계산할 수 없습니다.")
+
+# 시각화를 위한 추가 데이터 준비 (상관계수 히트맵을 위한 2x2 행렬)
+if not np.isnan(correlation):
+    corr_matrix = pd.DataFrame({
+        'PM10_농도': [1.0, correlation],
+        '총_승객_수': [correlation, 1.0]
+    }, index=['PM10_농도', '총_승객_수'])
+    # print("\n상관계수 행렬:")
+    # print(corr_matrix)
+    # merged_df.to_csv("merged_data_for_correlation.csv", index=False)
+
+    
     if mobility_filt.empty:
         st.warning("선택된 조건에 해당하는 미세먼지-교통 통합 데이터가 부족하거나, trans.csv 파일 로드에 문제가 있었습니다.")
     else:
