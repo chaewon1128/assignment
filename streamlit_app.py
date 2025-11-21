@@ -16,7 +16,7 @@ def set_matplotlib_korean_font():
     """Matplotlib에서 한글이 깨지지 않도록 폰트를 설정합니다."""
     # 폰트 경로를 직접 지정하거나, 시스템에 존재하는 폰트를 사용합니다.
     # Colab/Streamlit 환경을 고려하여 기본 폰트 설정으로만 시도
-    plt.rcParams['font.family'] = 'Malgun Gothic' # Windows 기준
+    plt.rcParams['font.family'] = 'NanumGothic' # Windows 기준
     plt.rcParams['axes.unicode_minus'] = False # 마이너스 폰트 깨짐 방지
     try:
         plt.rc('font', family='NanumGothic') # 시스템에 나눔고딕이 있을 경우 사용
